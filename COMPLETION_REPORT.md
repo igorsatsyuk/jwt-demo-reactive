@@ -1,8 +1,10 @@
 # 🎯 jwt-demo-reactive: Портировка завершена
 
-## 📌 Единый статус-блок (актуально на 2026-04-09)
+## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
+
+PR текущей итерации: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`.
 
 ---
 
@@ -66,8 +68,10 @@
 - ✅ **RateLimitingIT** — порядок правил (`order`), ключи (`IP`, `CLIENT_ID`), i18n 429 (`en`/`ru`)
 - ✅ **SecurityChainRegressionIT** — регрессии на single-pass обработку security фильтров (без двойного прохождения chain)
 - ✅ **application-test.properties** — зафиксирована валидная test-конфигурация `app.rate-limit.rules[]`
-- ✅ **RequestIntegrationIT** — lifecycle async request processing через scheduler-worker
+- ✅ **RequestIntegrationIT** — расширенные edge-cases для `/api/requests/{id}` (404, invalid UUID, 403, idempotency)
 - ✅ **RequestWorkerRetryIT** — retry/backoff регрессии worker-а (transient retry, exhaustion, non-transient no-retry)
+- ✅ **AccountIntegrationIT** — конкурентные сценарии для optimistic/pessimistic update balance
+- ✅ **WireMockIntegrationTest/AbstractIntegrationTest** — стабилизирован lifecycle IT-инфраструктуры для надежного `mvn verify`
 
 ---
 
@@ -154,7 +158,7 @@ Mono<String> response = webClient.post()
 
 ---
 
-## 📋 Следующие шаги (актуально на 2026-04-09)
+## 📋 Следующие шаги (актуально на 2026-04-10)
 
 ### High Priority
 1. **DPoP и security-регрессии**
@@ -170,9 +174,9 @@ Mono<String> response = webClient.post()
    - [x] Добавить регрессии на устойчивость и повторные попытки (retry/backoff)
 
 ### Medium Priority
-4. **Обработка остальных компонентов**
-   - [ ] AccountController
-   - [ ] Дополнительные фильтры
+4. **Stability follow-up**
+   - [ ] Оценить необходимость Quartz/распределенного lock для multi-instance request worker
+   - [ ] Закрыть review/merge PR #1
    
 5. **Документация**
    - [ ] API docs (Swagger)
@@ -230,5 +234,5 @@ Mono<String> response = webClient.post()
 ---
 
 **Статус:** ✅ ОБНОВЛЕНО ПО ФАКТИЧЕСКОМУ СОСТОЯНИЮ  
-**Дата:** 2026-04-09  
-**Следующая сессия:** edge-case покрытие account/request и оценка multi-instance locking стратегии
+**Дата:** 2026-04-10  
+**Следующая сессия:** review и merge PR #1 + оценка multi-instance locking стратегии
