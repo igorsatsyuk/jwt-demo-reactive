@@ -26,7 +26,6 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<jacoco.version>0.8.14</jacoco.version>
 		<!-- SonarQube Properties -->
-		<sonar.projectKey>jwt-demo-reactive</sonar.projectKey>
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco-merged/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 		<sonar.junit.reportPaths>${project.build.directory}/surefire-reports,${project.build.directory}/failsafe-reports</sonar.junit.reportPaths>
 	</properties>
