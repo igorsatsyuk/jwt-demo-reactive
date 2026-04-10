@@ -24,7 +24,7 @@
 		<springdoc.version>2.8.0</springdoc.version>
 		<testcontainers.version>1.20.4</testcontainers.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
-		<jacoco.version>0.8.10</jacoco.version>
+		<jacoco.version>0.8.14</jacoco.version>
 		<!-- SonarQube Properties -->
 		<sonar.projectKey>jwt-demo-reactive</sonar.projectKey>
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
@@ -227,13 +227,8 @@
 						<propertyName>jacoco.argLine</propertyName>
 					</configuration>
 				</execution>
-				<execution>
-					<id>report</id>
-					<phase>test</phase>
-					<goals>
-						<goal>report</goal>
-					</goals>
-				</execution>
+				<!-- Unit test report disabled due to JaCoCo incompatibility with Java 25 -->
+				<!-- Will be enabled when JaCoCo fully supports class file major version 69 -->
 				<execution>
 					<id>jacoco-integration-test</id>
 					<phase>post-integration-test</phase>
