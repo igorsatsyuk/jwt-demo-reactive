@@ -56,6 +56,36 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
+      - name: Upload Unit Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: target/surefire-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Integration Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: target/failsafe-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Test Reports Summary (Actions UI)
+        if: always()
+        shell: bash
+        run: |
+          unit_count=$(find target/surefire-reports -maxdepth 1 -name 'TEST-*.xml' 2>/dev/null | wc -l)
+          it_count=$(find target/failsafe-reports -maxdepth 1 -name 'TEST-*.xml' 2>/dev/null | wc -l)
+          {
+            echo "## Test Reports"
+            echo "- Unit JUnit XML files: ${unit_count} (artifact: unit-test-reports)"
+            echo "- Integration JUnit XML files: ${it_count} (artifact: integration-test-reports)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: SonarCloud analysis
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request'
         env:
