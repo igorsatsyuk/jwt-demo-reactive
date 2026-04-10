@@ -55,7 +55,7 @@ jobs:
           fail-on-error: false
 
       - name: SonarCloud analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
@@ -65,4 +65,6 @@ jobs:
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.projectKey=${SONAR_PROJECT_KEY}
           -Dsonar.organization=${SONAR_ORGANIZATION}
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=600
 
