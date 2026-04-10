@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -130,6 +131,102 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(nested.get("message")).isEqualTo("Client with phone=+37069990002 already exists");
     }
 
+    @Test
+    void get_request_status_not_found_returns_404() {
+        UUID unknownId = UUID.randomUUID();
+
+        AppResponse<Void> response = withRole("CLIENT_CREATE")
+                .get()
+                .uri("/api/requests/{id}", unknownId)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.NOT_FOUND.getCode());
+        assertThat(response.message()).isEqualTo("Request with id=" + unknownId + " not found");
+    }
+
+    @Test
+    void get_request_status_invalid_uuid_returns_400() {
+        AppResponse<Void> response = withRole("CLIENT_CREATE")
+                .get()
+                .uri("/api/requests/not-a-uuid")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isNotBlank();
+    }
+
+    @Test
+    void get_request_status_without_required_role_returns_403() {
+        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+                .post()
+                .uri("/api/clients")
+                .bodyValue(new CreateClientRequest("Jane", "Doe", "+37069990003"))
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(accepted).isNotNull();
+
+        AppResponse<Void> response = withRole("CLIENT_GET")
+                .get()
+                .uri("/api/requests/{id}", accepted.requestId())
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+    }
+
+    @Test
+    void get_request_status_is_idempotent_after_terminal_state() {
+        CreateClientRequest payload = new CreateClientRequest("John", "Idempotent", "+37069990004");
+        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+                .post()
+                .uri("/api/clients")
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(accepted).isNotNull();
+        RequestStatusResponse terminal = awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
+
+        RequestStatusResponse first = getRequestStatus(accepted.requestId());
+        RequestStatusResponse second = getRequestStatus(accepted.requestId());
+
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(first.requestId()).isEqualTo(accepted.requestId());
+        assertThat(second.requestId()).isEqualTo(accepted.requestId());
+        assertThat(first.status()).isEqualTo(terminal.status());
+        assertThat(second.status()).isEqualTo(terminal.status());
+        assertThat(first.response()).isEqualTo(second.response());
+    }
+
     private RequestStatusResponse awaitTerminalStatus(UUID requestId, RequestStatus expectedTerminalStatus) {
         RequestStatusResponse[] holder = new RequestStatusResponse[1];
 
@@ -154,6 +251,21 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
                 });
 
         return holder[0];
+    }
+
+    private RequestStatusResponse getRequestStatus(UUID requestId) {
+        AppResponse<RequestStatusResponse> response = withRole("CLIENT_CREATE")
+                .get()
+                .uri("/api/requests/{id}", requestId)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.OK)
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestStatusResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        return response.data();
     }
 
     private WebTestClient withRole(String role) {

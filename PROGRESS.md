@@ -59,17 +59,19 @@
 - ✅ **DpopIntegrationIT** — DPoP для auth + protected endpoints (включая replay и missing proof)
 - ✅ **RateLimitingIT** — порядок правил (`order`), key strategy (`IP`, `CLIENT_ID`), i18n 429 (`en`/`ru`)
 - ✅ **SecurityChainRegressionIT** — регрессии на отсутствие двойной обработки security-фильтров
-- ✅ **RequestIntegrationIT** — регрессии на scheduler-обработку request (COMPLETED/FAILED)
+- ✅ **RequestIntegrationIT** — расширены edge-cases для `/api/requests/{id}` (404, invalid UUID, 403, idempotency)
 - ✅ **RequestWorkerRetryIT** — retry/backoff регрессии worker-а (transient retry, exhaustion, non-transient no-retry)
+- ✅ **AccountIntegrationIT** — добавлены конкурентные сценарии optimistic/pessimistic обновления баланса
 - ✅ **Test rate-limit config** — зафиксирован полный `app.rate-limit.rules[]`, чтобы не ломать биндинг
 - ✅ **TestTextUtils** — общий helper для text/log assertions в IT
+- ✅ **IT lifecycle stabilization** — устранены флаки WireMock/R2DBC в `mvn verify`
 
 ## 📋 Следующие шаги (для будущих сессий)
 
 ### Высокий приоритет
 1. **Account API: расширение покрытия**
-   - Регрессионные и edge-case сценарии для optimistic/pessimistic обновления баланса
-   - Дополнительные проверки валидации и сообщений ошибок
+   - [x] Регрессионные и edge-case сценарии для optimistic/pessimistic обновления баланса
+   - [ ] Дополнительные проверки валидации и сообщений ошибок
 
 2. **Асинхронная обработка запросов**
    - [x] Переход на scheduler-ориентированный worker вместо `subscribe()` в request-path
@@ -124,6 +126,9 @@ mvn verify
 # 3. mvn spring-boot:run
 ```
 
-## 📌 Единый статус-блок (актуально на 2026-04-09)
+## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
+
+PR текущей итерации: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`.
+

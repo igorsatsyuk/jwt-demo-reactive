@@ -24,6 +24,14 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
 
     protected static final WireMockServer wireMockServer = new WireMockServer(options().dynamicPort());
 
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (wireMockServer.isRunning()) {
+                wireMockServer.stop();
+            }
+        }, "wiremock-it-shutdown"));
+    }
+
     @DynamicPropertySource
     static void wireMockProperties(DynamicPropertyRegistry registry) {
         if (!wireMockServer.isRunning()) {
@@ -49,6 +57,9 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setupWireMock() {
+        if (!wireMockServer.isRunning()) {
+            wireMockServer.start();
+        }
         wireMockServer.resetAll();
         configureFor("localhost", wireMockServer.port());
 
@@ -74,5 +85,6 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
             wireMockServer.stop();
         }
     }
+
 }
 

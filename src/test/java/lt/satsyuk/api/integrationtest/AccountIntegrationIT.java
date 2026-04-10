@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -21,8 +23,15 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -131,13 +140,61 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
         assertThat(response.message()).isEqualTo("Account for client id=999999 not found");
     }
 
+    @Test
+    void concurrent_pessimistic_updates_apply_all_deltas() {
+        Account account = saveAccount("0.00", "+37064444444");
+        BigDecimal delta = new BigDecimal("10.00");
+        int updates = 8;
+
+        List<HttpStatusCode> statuses = runConcurrentUpdates(
+                "/api/accounts/balance/pessimistic",
+                account.getClientId(),
+                delta,
+                updates
+        );
+
+        assertThat(statuses).allMatch(status -> status.equals(HttpStatus.OK));
+
+        Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
+        assertThat(persisted.getBalance()).isEqualByComparingTo(delta.multiply(BigDecimal.valueOf(updates)));
+    }
+
+    @Test
+    void concurrent_optimistic_updates_keep_balance_consistent_with_successful_requests() {
+        Account account = saveAccount("0.00", "+37065555555");
+        BigDecimal delta = new BigDecimal("1.00");
+        int updates = 20;
+
+        List<HttpStatusCode> statuses = runConcurrentUpdates(
+                "/api/accounts/balance/optimistic",
+                account.getClientId(),
+                delta,
+                updates
+        );
+
+        assertThat(statuses).allMatch(status -> status.equals(HttpStatus.OK) || status.equals(HttpStatus.CONFLICT));
+
+        long successfulUpdates = statuses.stream().filter(status -> status.equals(HttpStatus.OK)).count();
+        assertThat(successfulUpdates).isPositive();
+
+        Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
+        assertThat(persisted.getBalance()).isEqualByComparingTo(delta.multiply(BigDecimal.valueOf(successfulUpdates)));
+    }
+
     private WebTestClient withRole(String role) {
+        configureRole(role);
+        return authorizedClient();
+    }
+
+    private void configureRole(String role) {
         OAuth2AuthenticatedPrincipal principal = new DefaultOAuth2AuthenticatedPrincipal(
                 Map.of("sub", "integration-user"),
                 List.of(new SimpleGrantedAuthority("ROLE_" + role))
         );
         when(opaqueTokenIntrospector.introspect(anyString())).thenReturn(Mono.just(principal));
+    }
 
+    private WebTestClient authorizedClient() {
         return webTestClient.mutate()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer integration-token")
                 .build();
@@ -159,5 +216,49 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 .blockOptional()
                 .orElseThrow();
     }
-}
 
+    private List<HttpStatusCode> runConcurrentUpdates(String uri, Long clientId, BigDecimal amount, int parallelCalls) {
+        ExecutorService pool = Executors.newFixedThreadPool(Math.min(parallelCalls, 8));
+        configureRole("UPDATE_BALANCE");
+        WebTestClient authorizedClient = authorizedClient();
+        try {
+            List<Callable<HttpStatusCode>> tasks = new ArrayList<>();
+            for (int i = 0; i < parallelCalls; i++) {
+                tasks.add(() -> authorizedClient
+                        .post()
+                        .uri(uri)
+                        .bodyValue(new UpdateBalanceRequest(clientId, amount))
+                        .exchange()
+                        .returnResult(String.class)
+                        .getStatus());
+            }
+
+            long timeoutSeconds = Math.max(10L, parallelCalls * 2L);
+            List<Future<HttpStatusCode>> futures = pool.invokeAll(tasks, timeoutSeconds, TimeUnit.SECONDS);
+            List<HttpStatusCode> statuses = new ArrayList<>(futures.size());
+            for (Future<HttpStatusCode> future : futures) {
+                if (future.isCancelled()) {
+                    throw new IllegalStateException(
+                            "Concurrent updates timed out before all requests completed within " + timeoutSeconds + " seconds");
+                }
+                statuses.add(future.get());
+            }
+            return statuses;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent updates were interrupted", ex);
+        } catch (ExecutionException ex) {
+            throw new IllegalStateException("Concurrent updates failed", ex.getCause());
+        } finally {
+            pool.shutdown();
+            try {
+                if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    pool.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                pool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}

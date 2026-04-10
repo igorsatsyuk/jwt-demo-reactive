@@ -4,7 +4,9 @@
 
 В ходе данной сессии был успешно портирован проект **jwt-demo** (Spring Boot 4.0.3, JPA, RestTemplate, Servlet) в реактивный стек **jwt-demo-reactive** (Spring Boot 4.0.3, R2DBC, WebClient, WebFlux).
 
-**Результат:** ✅ **BUILD SUCCESS** — проект собирается, ключевые интеграционные auth/security/request-тесты (включая retry/backoff worker) выполняются успешно.
+**Результат:** ✅ **BUILD SUCCESS** — подтвержден полный `mvn verify` (`47 tests, 0 failures, 0 errors`).
+
+PR текущей итерации: ✅ `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`
 
 ---
 
@@ -20,6 +22,11 @@
 | **Security** | ✅ 100% | 3 WebFilter'а |
 | **Конфигурация** | ✅ 100% | WebClientConfig, SecurityService, GlobalExceptionHandler |
 | **Тестирование** | ✅ 90% | + RequestIntegrationIT, RequestWorkerRetryIT, DPoP/RateLimit/SecurityChain IT |
+
+Дополнительно в текущей итерации:
+- ✅ Расширены edge-case IT для `/api/requests/{id}` (`404`, `400 invalid UUID`, `403`, idempotency)
+- ✅ Добавлены конкурентные account сценарии (optimistic/pessimistic update)
+- ✅ Стабилизирован lifecycle IT-инфраструктуры (WireMock + Postgres) для надежного `verify`
 
 ### 📁 Новые/обновленные файлы
 
@@ -133,6 +140,8 @@ mvn verify  # Требует Docker
 - `SecurityChainRegressionIT` — single-pass регрессии против двойной обработки DPoP/RateLimit фильтров
 - `RequestIntegrationIT` — lifecycle async request processing через scheduler-worker
 - `RequestWorkerRetryIT` — retry/backoff регрессии worker-а (success-after-retry, exhaustion, non-transient no-retry)
+- `RequestIntegrationIT` (edge-cases) — `GET /api/requests/{id}`: `404`, `400 invalid UUID`, `403`, idempotent terminal response
+- `AccountIntegrationIT` (concurrency) — конкурентные optimistic/pessimistic balance update
 
 ---
 
@@ -165,8 +174,9 @@ mvn verify  # Требует Docker
 - [x] **Retry/backoff регрессии worker-а** — transient retry/exhaustion + non-transient no-retry
 
 ### Medium Priority (2-3 сессии)
-- [ ] **Расширение тестов** — edge-case покрытие account/request путей
+- [x] **Расширение тестов** — edge-case покрытие account/request путей
 - [ ] **Performance** — Оптимизация queries, кэширование
+- [ ] **Multi-instance worker strategy** — оценка Quartz/distributed lock
 
 ### Low Priority (по необходимости)
 - [ ] **Дополнительный мониторинг** — Custom метрики
@@ -277,7 +287,7 @@ java -jar target/jwt-demo-reactive-0.0.1-SNAPSHOT.jar
 7. ✅ Интеграционное тестирование с Testcontainers
 8. ✅ Production-ready конфигурацию
 
-**Статус:** ✅ **ГОТОВО К ИСПОЛЬЗОВАНИЮ / NEXT ITERATION READY**
+**Статус:** ✅ **READY FOR REVIEW**
 
 ---
 
@@ -285,6 +295,6 @@ java -jar target/jwt-demo-reactive-0.0.1-SNAPSHOT.jar
 
 *Проект успешно портирован и готов к следующему этапу разработки.*
 
-Дата актуализации: **2026-04-09**  
+Дата актуализации: **2026-04-10**  
 Версия: **0.0.1-SNAPSHOT**  
 Статус: **✅ Актуализировано по фактическому состоянию тестов**

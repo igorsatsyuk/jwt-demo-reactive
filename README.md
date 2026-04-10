@@ -18,13 +18,13 @@
 
 ## Где находится проект
 
-`C:\Users\igors\IdeaProjects\jwt-demo\jwt-demo-reactive`
+`<repo-root>/jwt-demo-reactive`
 
 ## Быстрый запуск
 
 ### Компиляция
 ```pwsh
-Set-Location "C:\Users\igors\IdeaProjects\jwt-demo\jwt-demo-reactive"
+Set-Location ".\jwt-demo-reactive"
 mvn clean compile -DskipTests
 ```
 
@@ -58,6 +58,8 @@ mvn -DskipTests=false "-Dit.test=KeycloakIntegrationIT,KeycloakNegativeIT,AuthVa
 - `SecurityChainRegressionIT` — отсутствие двойной обработки security-фильтров (DPoP/RateLimit single-pass)
 - `RequestIntegrationIT` — async request lifecycle через scheduler-worker (`PENDING -> COMPLETED|FAILED`) и nested response payload
 - `RequestWorkerRetryIT` — retry/backoff сценарии worker-а (success-after-retry, retry exhaustion, no-retry for non-transient)
+- `RequestIntegrationIT` (edge-cases) — `/api/requests/{id}`: `404 not found`, `400 invalid UUID`, `403 forbidden`, idempotent terminal status
+- `AccountIntegrationIT` (concurrency) — concurrent optimistic/pessimistic balance update
 
 ## 📊 Что уже портировано
 
@@ -103,15 +105,17 @@ mvn -DskipTests=false "-Dit.test=KeycloakIntegrationIT,KeycloakNegativeIT,AuthVa
 
 ## 🚀 Следующие задачи
 
-1. **Устойчивость async-воркера** — расширение edge-case регрессий для request/account
+1. **Устойчивость async-воркера** — оценка multi-instance locking стратегии (Quartz/distributed lock)
 2. **Полное покрытие функциональности** — миграция оставшихся компонентов
 3. **Документация и API-контракты** — финализация Swagger и гайдов
 
-## 📌 Единый статус-блок (актуально на 2026-04-09)
+## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
 
-Проект полностью готов к компиляции, полные auth-интеграции зафиксированы тестами, запуск локально возможен с Docker.
+PR текущей итерации: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`.
+
+`mvn verify` подтвержден: `47 tests, 0 failures, 0 errors`.
 
 ## 🔗 Дополнительная информация
 

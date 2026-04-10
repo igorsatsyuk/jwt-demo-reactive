@@ -11,7 +11,7 @@
 
 ```bash
 # Перейти в корень проекта jwt-demo
-cd C:\Users\igors\IdeaProjects\jwt-demo
+cd <repo-root>/jwt-demo
 
 # Скопировать и заполнить переменные окружения
 cp .env.example .env
@@ -269,8 +269,7 @@ docker logs -f jwt-demo-reactive
 docker compose logs -f
 
 # Прямой доступ к логам (если running локально)
-# На Windows: C:\Users\igors\IdeaProjects\jwt-demo\jwt-demo-reactive\logs\
-# На Linux: ./logs/
+# Логи приложения: ./jwt-demo-reactive/logs/
 ```
 
 ---

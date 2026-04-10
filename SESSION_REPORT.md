@@ -35,13 +35,29 @@
 - Вынесен общий text-helper для консистентных log assertions в IT:
   - `src/test/java/lt/satsyuk/api/util/TestTextUtils.java`
 
+## 🔄 Обновление статуса (2026-04-10)
+
+### ✅ Выполнено в текущей итерации
+- Расширены edge-case IT для request endpoint:
+  - `src/test/java/lt/satsyuk/api/integrationtest/RequestIntegrationIT.java`
+  - Добавлены проверки: `404 not found`, `400 invalid UUID`, `403 forbidden`, `idempotent terminal status`
+- Добавлены конкурентные account сценарии:
+  - `src/test/java/lt/satsyuk/api/integrationtest/AccountIntegrationIT.java`
+  - Добавлены optimistic/pessimistic concurrent update проверки
+- Стабилизирован lifecycle тестовой инфраструктуры:
+  - `src/test/java/lt/satsyuk/api/integrationtest/AbstractIntegrationTest.java`
+  - `src/test/java/lt/satsyuk/api/util/WireMockIntegrationTest.java`
+  - Устранены падения `Not listening on HTTP port` и `Failed to obtain R2DBC Connection`
+- Подтвержден полный прогон: `mvn verify` ✅ (`47 tests, 0 failures, 0 errors`)
+- Создан PR: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`
+
 ## 📌 Единый статус-блок (актуально на 2026-04-09)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
 
 ### ⏳ Что осталось
-1. Расширить edge-case покрытие для account/request API.
-2. Оценить необходимость Quartz/распределенного lock для multi-instance обработки request.
+1. Оценить необходимость Quartz/распределенного lock для multi-instance обработки request.
+2. Финализировать review и merge PR #1.
 
 ## ✅ Завершённые компоненты
 
@@ -229,5 +245,5 @@ Mono<String> response = webClient.post()
 См. единый статус-блок выше: он является каноническим источником метрик для этого документа.
 
 ---
-*Сессия завершена: 2026-04-09*
+*Сессия завершена: 2026-04-10*
 *Статус: ОБНОВЛЕНО ПО ФАКТИЧЕСКОМУ СОСТОЯНИЮ*
