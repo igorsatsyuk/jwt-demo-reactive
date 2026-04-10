@@ -112,6 +112,6 @@ mvn -DskipTests=false "-Dit.test=KeycloakIntegrationIT,KeycloakNegativeIT,AuthVa
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
 ## 🔗 Дополнительная информация
 
-- **PROGRESS.md** — Детальный список портированных компонентов и следующих шагов
+- **PROGRESS.md** — Детальный список портированных компонентов и технических деталей
 - **ROADMAP.md** — Единый список приоритетов (`High/Medium/Low`)
 - **AGENTS.md** (главный проект) — Архитектурные паттерны и описание проекта
