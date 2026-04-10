@@ -38,8 +38,9 @@ jobs:
 
       - name: Unit Test Summary
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           name: Unit Tests (JUnit)
           path: target/surefire-reports/TEST-*.xml
           reporter: java-junit
@@ -47,8 +48,9 @@ jobs:
 
       - name: Integration Test Summary
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           name: Integration Tests (JUnit)
           path: target/failsafe-reports/TEST-*.xml
           reporter: java-junit
