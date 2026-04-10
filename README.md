@@ -103,21 +103,15 @@ mvn -DskipTests=false "-Dit.test=KeycloakIntegrationIT,KeycloakNegativeIT,AuthVa
 ✅ **Общие test utility**
 - `TestTextUtils` для консистентных text/log assertions в IT
 
-## 🚀 Следующие задачи
+## 🎯 Приоритеты
 
-1. **Устойчивость async-воркера** — оценка multi-instance locking стратегии (Quartz/distributed lock)
-2. **Полное покрытие функциональности** — миграция оставшихся компонентов
-3. **Документация и API-контракты** — финализация Swagger и гайдов
+Канонический список приоритетов: [`ROADMAP.md`](ROADMAP.md).
 
 ## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
-
-PR текущей итерации: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`.
-
-`mvn verify` подтвержден: `47 tests, 0 failures, 0 errors`.
-
 ## 🔗 Дополнительная информация
 
 - **PROGRESS.md** — Детальный список портированных компонентов и следующих шагов
+- **ROADMAP.md** — Единый список приоритетов (`High/Medium/Low`)
 - **AGENTS.md** (главный проект) — Архитектурные паттерны и описание проекта

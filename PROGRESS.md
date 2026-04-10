@@ -66,32 +66,9 @@
 - ✅ **TestTextUtils** — общий helper для text/log assertions в IT
 - ✅ **IT lifecycle stabilization** — устранены флаки WireMock/R2DBC в `mvn verify`
 
-## 📋 Следующие шаги (для будущих сессий)
+## 🎯 Приоритеты
 
-### Высокий приоритет
-1. **Account API: расширение покрытия**
-   - [x] Регрессионные и edge-case сценарии для optimistic/pessimistic обновления баланса
-   - [ ] Дополнительные проверки валидации и сообщений ошибок
-
-2. **Асинхронная обработка запросов**
-   - [x] Переход на scheduler-ориентированный worker вместо `subscribe()` в request-path
-   - [x] Добавить retry/backoff стратегию и регрессии для transient DB ошибок
-   - [ ] Оценить необходимость Quartz/распределенного lock для multi-instance сценария
-
-3. **Расширение тестирования**:
-   - [x] KeycloakIntegrationIT с реальным Keycloak Testcontainer
-   - [x] KeycloakNegativeIT для stub Keycloak (WireMock)
-   - [x] RateLimitingIT для проверки порядка правил и ключей
-   - [x] DPoP integration/regression тесты
-   - [x] Отдельные регрессии на повторную/двойную обработку security chain
-
-### Средний приоритет
-4. **Миграция базы данных** — Убедиться, что Flyway работает корректно с R2DBC
-5. **Документация API** — Swagger/OpenAPI аннотации уже на месте
-
-### Низкий приоритет
-6. **Поддержка реактивного поиска** — Оптимизировать запросы в зависимости от нагрузки
-7. **Метрики и monitoring** — Расширить наблюдаемость для операций БД
+Единый список приоритетов (`High/Medium/Low`) вынесен в [`ROADMAP.md`](ROADMAP.md).
 
 ## 🔧 Технические детали
 
@@ -129,6 +106,4 @@ mvn verify
 ## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
-
-PR текущей итерации: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`.
 
