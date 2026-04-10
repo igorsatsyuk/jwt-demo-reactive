@@ -50,9 +50,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        accountRepository.deleteAll()
+        requestRepository.deleteAll()
+                .then(accountRepository.deleteAll())
                 .then(clientRepository.deleteAll())
-                .then(requestRepository.deleteAll())
                 .block();
     }
 
@@ -195,6 +195,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+
+        // Do not leak pending async work into the next test's cleanup phase.
+        awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
     }
 
     @Test
