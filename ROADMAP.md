@@ -1,0 +1,31 @@
+# ROADMAP
+
+Актуально на: **2026-04-10**
+
+Канонический список приоритетов для проекта `jwt-demo-reactive`.
+Все отчеты ссылаются на этот файл, чтобы избежать рассинхронизации.
+
+## High
+
+- [x] Полные интеграционные auth тесты (Keycloak + WireMock)
+- [x] Validation IT для `POST /api/auth/login` (unsupported media type)
+- [x] DPoP integration/regression тесты (auth + protected endpoints)
+- [x] RateLimiting IT (rule order, key strategy, i18n 429)
+- [x] Security chain regression (single-pass, без двойной обработки фильтров)
+- [x] Scheduler-driven async worker вместо `subscribe()` в request-path
+- [x] Retry/backoff регрессии для transient/non-transient сценариев worker-а
+
+## Medium
+
+- [ ] Оценить необходимость Quartz/распределенного lock для multi-instance request worker
+- [ ] Подготовить критерии выбора single-instance vs distributed lock
+- [ ] Дополнительные проверки валидации и сообщений ошибок для account/request API
+- [ ] Финализировать API docs (Swagger/OpenAPI)
+- [ ] Performance: оптимизация запросов и оценка кэширования
+
+## Low
+
+- [ ] Дополнительный мониторинг и кастомные метрики
+- [ ] Reactive streams optimization
+- [ ] GraphQL (опционально)
+

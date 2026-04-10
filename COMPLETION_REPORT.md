@@ -158,34 +158,9 @@ Mono<String> response = webClient.post()
 
 ---
 
-## 📋 Следующие шаги (актуально на 2026-04-10)
+## 🎯 Приоритеты
 
-### High Priority
-1. **DPoP и security-регрессии**
-   - [x] Расширить интеграционные DPoP сценарии для auth + protected endpoints
-   - [x] Добавить отдельные регрессии на фильтры, чтобы не допустить повторной двойной обработки chain
-
-2. **Rate limiting интеграционные кейсы**
-   - [x] Добавить/расширить IT на порядок правил и ключи (`IP`, `CLIENT_ID`)
-   - [x] Проверить русские/английские сообщения в ответах 429
-
-3. **Оптимизация async обработки**
-   - [x] Переход с `subscribe()` на scheduler-ориентированный воркер
-   - [x] Добавить регрессии на устойчивость и повторные попытки (retry/backoff)
-
-### Medium Priority
-4. **Stability follow-up**
-   - [ ] Оценить необходимость Quartz/распределенного lock для multi-instance request worker
-   - [ ] Закрыть review/merge PR #1
-   
-5. **Документация**
-   - [ ] API docs (Swagger)
-   - [ ] Deployment guide
-
-### Low Priority
-6. **Performance optimization**
-7. **Дополнительный мониторинг**
-8. **Оптимизация Reactive streams**
+Единый список приоритетов (`High/Medium/Low`) вынесен в [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -235,4 +210,3 @@ Mono<String> response = webClient.post()
 
 **Статус:** ✅ ОБНОВЛЕНО ПО ФАКТИЧЕСКОМУ СОСТОЯНИЮ  
 **Дата:** 2026-04-10  
-**Следующая сессия:** review и merge PR #1 + оценка multi-instance locking стратегии

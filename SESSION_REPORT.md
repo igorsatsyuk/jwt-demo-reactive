@@ -51,7 +51,7 @@
 - Подтвержден полный прогон: `mvn verify` ✅ (`47 tests, 0 failures, 0 errors`)
 - Создан PR: `https://github.com/igorsatsyuk/jwt-demo-reactive/pull/1`
 
-## 📌 Единый статус-блок (актуально на 2026-04-09)
+## 📌 Единый статус-блок (актуально на 2026-04-10)
 
 Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
 
@@ -195,23 +195,9 @@ Mono<String> response = webClient.post()
 - ✅ Написанию интеграционных тестов
 - ✅ Развертыванию в Docker
 
-## 📝 Следующие этапы
+## 🎯 Приоритеты
 
-1. **High Priority**
-   - [x] Расширить DPoP integration/regression тесты (auth + protected endpoints)
-   - [x] Добавить/расширить RateLimiting IT (порядок правил, key strategy, ответы 429)
-   - [x] Добавить SecurityChainRegressionIT на кейсы двойной обработки фильтров
-   - [x] Перевести async-worker на scheduler-подход вместо `subscribe()`
-   - [x] Добавить регрессии на retry/backoff для transient ошибок
-
-2. **Medium Priority**
-   - [ ] Расширение тестового покрытия по edge-case сценариям account/request
-   - [ ] Финализация и вычитка API документации
-
-3. **Low Priority**
-   - [ ] Performance optimization
-   - [ ] Additional monitoring metrics
-   - [ ] Reactive streams optimization
+Единый список приоритетов (`High/Medium/Low`) вынесен в [`ROADMAP.md`](ROADMAP.md).
 
 ## 🔧 Технические решения
 

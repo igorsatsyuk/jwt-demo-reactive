@@ -162,26 +162,9 @@ mvn verify  # Требует Docker
 
 ---
 
-## 🚀 Следующие приоритеты
+## 🎯 Приоритеты
 
-### High Priority (1-2 сессии)
-- [x] **Полные интеграционные auth тесты** — KeycloakIT + WireMockIT
-- [x] **Validation IT для unsupported media type** — `/api/auth/login`
-- [x] **DPoP тесты** — расширена валидация DPoP proofs и отрицательные кейсы
-- [x] **RateLimiting IT** — зафиксированы порядок правил и key strategy (+ i18n для 429)
-- [x] **Security chain регрессии** — отдельные кейсы на защиту от двойной обработки фильтров
-- [x] **Оптимизация async** — Spring Scheduler вместо subscribe()
-- [x] **Retry/backoff регрессии worker-а** — transient retry/exhaustion + non-transient no-retry
-
-### Medium Priority (2-3 сессии)
-- [x] **Расширение тестов** — edge-case покрытие account/request путей
-- [ ] **Performance** — Оптимизация queries, кэширование
-- [ ] **Multi-instance worker strategy** — оценка Quartz/distributed lock
-
-### Low Priority (по необходимости)
-- [ ] **Дополнительный мониторинг** — Custom метрики
-- [ ] **GraphQL** — Альтернативный API
-- [ ] **Reactive streams** — Advanced optimization
+Единый список приоритетов (`High/Medium/Low`) вынесен в [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
