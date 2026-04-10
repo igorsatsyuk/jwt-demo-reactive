@@ -26,7 +26,12 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -177,12 +182,19 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     }
 
     private WebTestClient withRole(String role) {
+        configureRole(role);
+        return authorizedClient();
+    }
+
+    private void configureRole(String role) {
         OAuth2AuthenticatedPrincipal principal = new DefaultOAuth2AuthenticatedPrincipal(
                 Map.of("sub", "integration-user"),
                 List.of(new SimpleGrantedAuthority("ROLE_" + role))
         );
         when(opaqueTokenIntrospector.introspect(anyString())).thenReturn(Mono.just(principal));
+    }
 
+    private WebTestClient authorizedClient() {
         return webTestClient.mutate()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer integration-token")
                 .build();
@@ -207,10 +219,12 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
     private List<HttpStatusCode> runConcurrentUpdates(String uri, Long clientId, BigDecimal amount, int parallelCalls) {
         ExecutorService pool = Executors.newFixedThreadPool(Math.min(parallelCalls, 8));
+        configureRole("UPDATE_BALANCE");
+        WebTestClient authorizedClient = authorizedClient();
         try {
             List<Callable<HttpStatusCode>> tasks = new ArrayList<>();
             for (int i = 0; i < parallelCalls; i++) {
-                tasks.add(() -> withRole("UPDATE_BALANCE")
+                tasks.add(() -> authorizedClient
                         .post()
                         .uri(uri)
                         .bodyValue(new UpdateBalanceRequest(clientId, amount))
@@ -219,9 +233,14 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                         .getStatus());
             }
 
-            List<Future<HttpStatusCode>> futures = pool.invokeAll(tasks);
+            long timeoutSeconds = Math.max(10L, parallelCalls * 2L);
+            List<Future<HttpStatusCode>> futures = pool.invokeAll(tasks, timeoutSeconds, TimeUnit.SECONDS);
             List<HttpStatusCode> statuses = new ArrayList<>(futures.size());
             for (Future<HttpStatusCode> future : futures) {
+                if (future.isCancelled()) {
+                    throw new IllegalStateException(
+                            "Concurrent updates timed out before all requests completed within " + timeoutSeconds + " seconds");
+                }
                 statuses.add(future.get());
             }
             return statuses;
@@ -231,7 +250,15 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
         } catch (ExecutionException ex) {
             throw new IllegalStateException("Concurrent updates failed", ex.getCause());
         } finally {
-            pool.shutdownNow();
+            pool.shutdown();
+            try {
+                if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    pool.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                pool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }

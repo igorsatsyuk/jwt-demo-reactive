@@ -58,12 +58,11 @@ public abstract class AbstractIntegrationTest {
                 .build();
     }
 
-    private static final String IT_MIGRATIONS_LOCATION = "filesystem:src/main/resources/db/migration";
-
     private void ensureSchemaMigrated() {
+        ensurePostgresStarted();
         Flyway.configure()
                 .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                .locations(IT_MIGRATIONS_LOCATION)
+                .locations("classpath:db/migration")
                 .load()
                 .migrate();
     }

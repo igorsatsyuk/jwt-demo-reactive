@@ -2,6 +2,7 @@ package lt.satsyuk.api.util;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import lt.satsyuk.api.integrationtest.AbstractIntegrationTest;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -22,6 +23,14 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
     protected static final String INTROSPECT_PATH = "/realms/" + REALM + "/protocol/openid-connect/token/introspect";
 
     protected static final WireMockServer wireMockServer = new WireMockServer(options().dynamicPort());
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (wireMockServer.isRunning()) {
+                wireMockServer.stop();
+            }
+        }, "wiremock-it-shutdown"));
+    }
 
     @DynamicPropertySource
     static void wireMockProperties(DynamicPropertyRegistry registry) {
@@ -68,6 +77,13 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
                                   "resource_access": {"spring-app": {"roles": ["CLIENT_CREATE", "CLIENT_GET", "CLIENT_SEARCH", "UPDATE_BALANCE"]}}
                                 }
                                 """)));
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        if (wireMockServer.isRunning()) {
+            wireMockServer.stop();
+        }
     }
 
 }
