@@ -18,13 +18,13 @@
 
 ## Где находится проект
 
-`C:\Users\igors\IdeaProjects\jwt-demo\jwt-demo-reactive`
+`<repo-root>/jwt-demo-reactive`
 
 ## Быстрый запуск
 
 ### Компиляция
 ```pwsh
-Set-Location "C:\Users\igors\IdeaProjects\jwt-demo\jwt-demo-reactive"
+Set-Location ".\jwt-demo-reactive"
 mvn clean compile -DskipTests
 ```
 
