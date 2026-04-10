@@ -17,13 +17,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
 @ActiveProfiles("test")
 public abstract class AbstractIntegrationTest {
 
@@ -43,7 +40,6 @@ public abstract class AbstractIntegrationTest {
     // -------------------------------------------------------------------------
     // POSTGRES TESTCONTAINER
     // -------------------------------------------------------------------------
-    @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
             .withDatabaseName("appdb")
             .withUsername("app")
@@ -62,10 +58,12 @@ public abstract class AbstractIntegrationTest {
                 .build();
     }
 
+    private static final String IT_MIGRATIONS_LOCATION = "filesystem:src/main/resources/db/migration";
+
     private void ensureSchemaMigrated() {
         Flyway.configure()
                 .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                .locations("classpath:db/migration")
+                .locations(IT_MIGRATIONS_LOCATION)
                 .load()
                 .migrate();
     }
@@ -73,6 +71,7 @@ public abstract class AbstractIntegrationTest {
     /** Only dynamic (port-bearing) Postgres props — static Keycloak defaults live in application-test.properties */
     @DynamicPropertySource
     static void postgresProperties(DynamicPropertyRegistry registry) {
+        ensurePostgresStarted();
         registry.add("spring.r2dbc.url", () ->
                 "r2dbc:postgresql://" + postgres.getHost() + ":" + postgres.getFirstMappedPort() + "/appdb");
         registry.add("spring.r2dbc.username", postgres::getUsername);
@@ -83,6 +82,12 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.flyway.url", postgres::getJdbcUrl);
         registry.add("spring.flyway.user", postgres::getUsername);
         registry.add("spring.flyway.password", postgres::getPassword);
+    }
+
+    private static synchronized void ensurePostgresStarted() {
+        if (!postgres.isRunning()) {
+            postgres.start();
+        }
     }
 
     // =========================================================================

@@ -2,7 +2,6 @@ package lt.satsyuk.api.util;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import lt.satsyuk.api.integrationtest.AbstractIntegrationTest;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -49,6 +48,9 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setupWireMock() {
+        if (!wireMockServer.isRunning()) {
+            wireMockServer.start();
+        }
         wireMockServer.resetAll();
         configureFor("localhost", wireMockServer.port());
 
@@ -68,11 +70,5 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
                                 """)));
     }
 
-    @AfterAll
-    static void stopWireMock() {
-        if (wireMockServer.isRunning()) {
-            wireMockServer.stop();
-        }
-    }
 }
 
