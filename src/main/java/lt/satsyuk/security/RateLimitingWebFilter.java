@@ -11,6 +11,7 @@ import lt.satsyuk.service.MessageService;
 import lt.satsyuk.service.SecurityService;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
@@ -47,7 +48,9 @@ public class RateLimitingWebFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        String method = exchange.getRequest().getMethod() != null ? exchange.getRequest().getMethod().toString() : null;
+        String method = Optional.ofNullable(exchange.getRequest().getMethod())
+                .map(HttpMethod::name)
+                .orElse("");
 
         return ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication())
@@ -190,7 +193,7 @@ public class RateLimitingWebFilter implements WebFilter {
         try {
             byte[] payload = objectMapper.writeValueAsBytes(error);
             return exchange.getResponse().writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(payload)));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return exchange.getResponse().setComplete();
         }
     }

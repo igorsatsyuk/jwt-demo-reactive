@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -35,7 +34,7 @@ public class ClientService {
     public Mono<ClientResponse> create(CreateClientRequest req) {
         return repo.existsByPhone(req.phone())
                 .flatMap(exists -> {
-                    if (exists) {
+                    if (Boolean.TRUE.equals(exists)) {
                         return Mono.error(new PhoneAlreadyExistsException(req.phone()));
                     }
 

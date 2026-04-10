@@ -19,13 +19,13 @@ import static org.mockito.Mockito.when;
  * Smoke tests for AuthController.
  * Note: In a real integration test, you'd typically mock or stub the Keycloak endpoint.
  */
-public class AuthControllerIT extends AbstractIntegrationTest {
+class AuthControllerIT extends AbstractIntegrationTest {
 
     @MockitoBean
     private KeycloakReactiveAuthService authService;
 
     @Test
-    public void testLoginEndpointReturns400OnBadCredentials() {
+    void testLoginEndpointReturns400OnBadCredentials() {
         LoginRequest request = new LoginRequest("testuser", "password", "spring-app", "spring-app-secret");
         when(authService.login(any(LoginRequest.class), isNull()))
                 .thenReturn(Mono.error(new KeycloakAuthException("Login failed", HttpStatus.UNAUTHORIZED, "invalid_grant")));
@@ -41,7 +41,7 @@ public class AuthControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testLoginEndpointReturnsValidationErrorOnMissingFields() {
+    void testLoginEndpointReturnsValidationErrorOnMissingFields() {
         webTestClient.post()
                 .uri("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

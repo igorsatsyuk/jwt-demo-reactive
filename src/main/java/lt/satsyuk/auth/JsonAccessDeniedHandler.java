@@ -31,7 +31,7 @@ public class JsonAccessDeniedHandler implements ServerAccessDeniedHandler {
         try {
             byte[] payload = objectMapper.writeValueAsBytes(error);
             return response.writeWith(Mono.just(response.bufferFactory().wrap(payload)));
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             return response.setComplete();
         }
     }

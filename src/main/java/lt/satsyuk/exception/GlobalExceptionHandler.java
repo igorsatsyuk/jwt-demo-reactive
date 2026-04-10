@@ -22,6 +22,8 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+    private static final String VALIDATION_FAILED_MESSAGE_KEY = "error.validation.failed";
+
     private final MessageSource messageSource;
     private final MessageService messageService;
 
@@ -31,7 +33,7 @@ public class GlobalExceptionHandler {
         String errorMessage = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
-                .orElseGet(() -> messageService.getMessage("error.validation.failed"));
+                .orElseGet(() -> messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY));
 
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), errorMessage));
     }
@@ -88,14 +90,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ServerWebInputException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<AppResponse<Void>> handleServerWebInput(ServerWebInputException ex) {
-        String message = ex.getReason() != null ? ex.getReason() : messageService.getMessage("error.validation.failed");
+        String message = ex.getReason() != null ? ex.getReason() : messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
     }
 
     @ExceptionHandler(UnsupportedMediaTypeStatusException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<AppResponse<Void>> handleUnsupportedMediaType(UnsupportedMediaTypeStatusException ex) {
-        String message = ex.getReason() != null ? ex.getReason() : messageService.getMessage("error.validation.failed");
+        String message = ex.getReason() != null ? ex.getReason() : messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
     }
 

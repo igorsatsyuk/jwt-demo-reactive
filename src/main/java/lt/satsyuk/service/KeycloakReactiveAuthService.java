@@ -1,6 +1,5 @@
 package lt.satsyuk.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -21,10 +20,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -46,14 +41,12 @@ public class KeycloakReactiveAuthService {
     private static final String PASSWORD = "password";
     private static final String INVALID_CLIENT = "invalid_client";
     private static final String NOT_ALLOWED = "not_allowed";
-    private static final String EMPTY_RESPONSE = "Empty response";
     private static final String LOGIN_FAILED = "Login failed";
     private static final String REFRESH_FAILED = "Refresh failed";
     private static final String LOGOUT_FAILED = "Logout failed";
 
     private final WebClient webClient;
     private final KeycloakProperties props;
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private final Counter loginSuccessCounter;
     private final Counter loginFailureCounter;

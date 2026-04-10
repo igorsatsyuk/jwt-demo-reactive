@@ -153,7 +153,9 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 updates
         );
 
-        assertThat(statuses).allMatch(status -> status.equals(HttpStatus.OK));
+        assertThat(statuses)
+                .isNotEmpty()
+                .allMatch(status -> status.equals(HttpStatus.OK));
 
         Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
         assertThat(persisted.getBalance()).isEqualByComparingTo(delta.multiply(BigDecimal.valueOf(updates)));
@@ -172,7 +174,9 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 updates
         );
 
-        assertThat(statuses).allMatch(status -> status.equals(HttpStatus.OK) || status.equals(HttpStatus.CONFLICT));
+        assertThat(statuses)
+                .isNotEmpty()
+                .allMatch(status -> status.equals(HttpStatus.OK) || status.equals(HttpStatus.CONFLICT));
 
         long successfulUpdates = statuses.stream().filter(status -> status.equals(HttpStatus.OK)).count();
         assertThat(successfulUpdates).isPositive();
@@ -255,7 +259,7 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
                     pool.shutdownNow();
                 }
-            } catch (InterruptedException ex) {
+            } catch (InterruptedException _) {
                 pool.shutdownNow();
                 Thread.currentThread().interrupt();
             }
