@@ -31,7 +31,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         }
 
         exchange.getResponse().beforeCommit(() -> {
-            if (StringUtils.isEmpty(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
+            if (!StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
                 String lateTraceId = resolveTraceId();
                 if (StringUtils.hasText(lateTraceId)) {
                     exchange.getResponse().getHeaders().add(TRACE_ID_HEADER, lateTraceId);

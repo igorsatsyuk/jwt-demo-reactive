@@ -80,12 +80,13 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> nested = (Map<String, Object>) completed.response();
-        assertThat(nested.get("code")).isEqualTo(0);
-        assertThat(nested.get("message")).isEqualTo("OK");
+        assertThat(nested)
+                .containsEntry("code", 0)
+                .containsEntry("message", "OK");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) nested.get("data");
-        assertThat(data.get("phone")).isEqualTo(payload.phone());
+        assertThat(data).containsEntry("phone", payload.phone());
 
         Number clientIdValue = (Number) data.get("id");
         assertThat(clientIdValue).isNotNull();
@@ -127,8 +128,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> nested = (Map<String, Object>) failed.response();
-        assertThat(nested.get("code")).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
-        assertThat(nested.get("message")).isEqualTo("Client with phone=+37069990002 already exists");
+        assertThat(nested)
+                .containsEntry("code", AppResponse.ErrorCode.CONFLICT.getCode())
+                .containsEntry("message", "Client with phone=+37069990002 already exists");
     }
 
     @Test

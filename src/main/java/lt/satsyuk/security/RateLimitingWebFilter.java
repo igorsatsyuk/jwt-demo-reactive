@@ -47,7 +47,7 @@ public class RateLimitingWebFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        String method = exchange.getRequest().getMethod() != null ? exchange.getRequest().getMethod().toString() : null;
+        String method = exchange.getRequest().getMethod().name();
 
         return ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication())
@@ -190,7 +190,7 @@ public class RateLimitingWebFilter implements WebFilter {
         try {
             byte[] payload = objectMapper.writeValueAsBytes(error);
             return exchange.getResponse().writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(payload)));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return exchange.getResponse().setComplete();
         }
     }
