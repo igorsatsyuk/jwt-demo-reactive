@@ -30,7 +30,7 @@ class ClientServiceTest {
 
         StepVerifier.create(clientService.create(request))
                 .expectErrorSatisfies(error -> {
-                    assert error instanceof PhoneAlreadyExistsException;
+                    org.assertj.core.api.Assertions.assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
                     PhoneAlreadyExistsException ex = (PhoneAlreadyExistsException) error;
                     org.assertj.core.api.Assertions.assertThat(ex.getPhone()).isEqualTo(request.phone());
                 })
