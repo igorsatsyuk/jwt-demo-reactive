@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -101,17 +102,20 @@ class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
         CountDownLatch startLatch = new CountDownLatch(1);
 
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            executor.submit(() -> {
+            Future<?> firstTrigger = executor.submit(() -> {
                 awaitStart(startLatch);
                 requestService.processPendingRequests();
             });
-            executor.submit(() -> {
+            Future<?> secondTrigger = executor.submit(() -> {
                 awaitStart(startLatch);
                 secondRequestService.processPendingRequests();
             });
             startLatch.countDown();
             executor.shutdown();
             assertThat(executor.awaitTermination(3, TimeUnit.SECONDS)).isTrue();
+            // Make task failures visible to the test instead of being swallowed by ExecutorService.
+            firstTrigger.get(1, TimeUnit.SECONDS);
+            secondTrigger.get(1, TimeUnit.SECONDS);
         }
 
         Awaitility.await()
