@@ -62,6 +62,28 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                                 @Param("now") OffsetDateTime now);
 
     @Modifying
+    @Query("""
+            UPDATE request
+               SET status = 'PENDING',
+                   status_changed_at = :now
+             WHERE status = 'PROCESSING'
+               AND type = 'CLIENT_CREATE'
+               AND status_changed_at < :staleBefore
+            """)
+    Mono<Integer> reclaimStaleClientCreateRequests(@Param("staleBefore") OffsetDateTime staleBefore,
+                                                   @Param("now") OffsetDateTime now);
+
+    @Query("""
+            SELECT COALESCE(MAX(EXTRACT(EPOCH FROM (:now - status_changed_at)))::bigint, 0)
+              FROM request
+             WHERE status = 'PROCESSING'
+               AND type = 'CLIENT_CREATE'
+               AND status_changed_at < :staleBefore
+            """)
+    Mono<Long> findMaxStaleClientCreateAgeSeconds(@Param("staleBefore") OffsetDateTime staleBefore,
+                                                  @Param("now") OffsetDateTime now);
+
+    @Modifying
     @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND status = 'PROCESSING'")
     Mono<Integer> markCompleted(@Param("id") UUID id,
                                 @Param("responseData") String responseData,
