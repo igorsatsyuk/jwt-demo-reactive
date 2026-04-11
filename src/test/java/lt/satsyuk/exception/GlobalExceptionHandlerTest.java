@@ -1,0 +1,174 @@
+package lt.satsyuk.exception;
+
+import lt.satsyuk.dto.AppResponse;
+import lt.satsyuk.service.MessageService;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.MessageSource;
+import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ServerWebInputException;
+import org.springframework.web.server.UnsupportedMediaTypeStatusException;
+
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class GlobalExceptionHandlerTest {
+
+    private final MessageSource messageSource = mock(MessageSource.class);
+    private final MessageService messageService = mock(MessageService.class);
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(messageSource, messageService);
+
+    @Test
+    void handleValidationException_aggregatesFieldErrors() throws Exception {
+        BindingResult bindingResult = mock(BindingResult.class);
+        when(bindingResult.getFieldErrors()).thenReturn(List.of(
+                new FieldError("loginRequest", "username", "must not be blank"),
+                new FieldError("loginRequest", "password", "must not be blank")
+        ));
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        MethodArgumentNotValidException ex = new MethodArgumentNotValidException(new MethodParameter(method, 0), bindingResult);
+
+        AppResponse<Void> response = handler.handleValidationException(ex).block();
+
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("username: must not be blank; password: must not be blank");
+    }
+
+    @Test
+    void handleValidationException_usesDefaultMessageWhenNoFieldErrors() throws Exception {
+        BindingResult bindingResult = mock(BindingResult.class);
+        when(bindingResult.getFieldErrors()).thenReturn(List.of());
+        when(messageService.getMessage("error.validation.failed")).thenReturn("Validation failed");
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        MethodArgumentNotValidException ex = new MethodArgumentNotValidException(new MethodParameter(method, 0), bindingResult);
+
+        AppResponse<Void> response = handler.handleValidationException(ex).block();
+
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("Validation failed");
+    }
+
+    @Test
+    void handleAccessDenied_returnsForbiddenCodeAndLocalizedMessage() {
+        when(messageService.getMessage("api.error.forbidden")).thenReturn("Forbidden localized");
+
+        AppResponse<Void> response = handler.handleAccessDenied(new AccessDeniedException("nope")).block();
+
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+        assertThat(response.message()).isEqualTo("Forbidden localized");
+    }
+
+    @Test
+    void handleDomainExceptions_buildsMessageWithArgs() {
+        when(messageService.getMessage(eq("error.account.notFound"), any())).thenReturn("Account 10 not found");
+        when(messageService.getMessage(eq("error.account.optimisticLock"), any())).thenReturn("Lock conflict for 11");
+        when(messageService.getMessage(eq("error.client.notFound"), any())).thenReturn("Client 12 not found");
+        when(messageService.getMessage(eq("error.client.searchQueryTooShort"), any())).thenReturn("min length 3");
+        when(messageService.getMessage(eq("error.request.notFound"), any())).thenReturn("Request not found");
+        when(messageService.getMessage(eq("error.client.phoneExists"), any())).thenReturn("Phone exists");
+
+        AppResponse<Void> accountNotFound = handler.handleAccountNotFound(new AccountNotFoundException(10L)).block();
+        AppResponse<Void> lockConflict = handler.handleAccountOptimisticLock(new AccountOptimisticLockException(11L)).block();
+        AppResponse<Void> clientNotFound = handler.handleNotFound(new ClientNotFoundException(12L)).block();
+        AppResponse<Void> shortQuery = handler.handleClientSearchQueryTooShort(new ClientSearchQueryTooShortException(3)).block();
+        AppResponse<Void> requestNotFound = handler.handleRequestNotFound(new RequestNotFoundException(UUID.randomUUID())).block();
+        AppResponse<Void> phoneExists = handler.handlePhoneExists(new PhoneAlreadyExistsException("+123")).block();
+
+        assertThat(accountNotFound.code()).isEqualTo(AppResponse.ErrorCode.NOT_FOUND.getCode());
+        assertThat(lockConflict.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+        assertThat(clientNotFound.code()).isEqualTo(AppResponse.ErrorCode.NOT_FOUND.getCode());
+        assertThat(shortQuery.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(requestNotFound.code()).isEqualTo(AppResponse.ErrorCode.NOT_FOUND.getCode());
+        assertThat(phoneExists.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+    }
+
+    @Test
+    void handleTypeMismatch_usesMessageServiceWithInvalidValue() {
+        when(messageService.getMessage(eq("error.typeMismatch"), any())).thenReturn("Invalid value: abc");
+
+        MethodArgumentTypeMismatchException ex = mock(MethodArgumentTypeMismatchException.class);
+        when(ex.getValue()).thenReturn("abc");
+        AppResponse<Void> response = handler.handleTypeMismatch(ex).block();
+
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("Invalid value: abc");
+
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(messageService).getMessage(eq("error.typeMismatch"), argsCaptor.capture());
+        assertThat(argsCaptor.getValue()).containsExactly("abc");
+    }
+
+    @Test
+    void handleServerWebInput_andUnsupportedMediaType_useReasonOrFallback() {
+        when(messageService.getMessage("error.validation.failed")).thenReturn("Validation fallback");
+
+        ServerWebInputException inputWithReason = mock(ServerWebInputException.class);
+        ServerWebInputException inputWithoutReason = mock(ServerWebInputException.class);
+        when(inputWithReason.getReason()).thenReturn("invalid json");
+        when(inputWithoutReason.getReason()).thenReturn(null);
+
+        AppResponse<Void> withReason = handler.handleServerWebInput(inputWithReason).block();
+        AppResponse<Void> fallbackInput = handler.handleServerWebInput(inputWithoutReason).block();
+
+        UnsupportedMediaTypeStatusException mediaWithReason = mock(UnsupportedMediaTypeStatusException.class);
+        UnsupportedMediaTypeStatusException mediaWithoutReason = mock(UnsupportedMediaTypeStatusException.class);
+        when(mediaWithReason.getReason()).thenReturn("Content type not supported");
+        when(mediaWithoutReason.getReason()).thenReturn(null);
+
+        AppResponse<Void> mediaReason = handler.handleUnsupportedMediaType(mediaWithReason).block();
+        AppResponse<Void> mediaFallback = handler.handleUnsupportedMediaType(mediaWithoutReason).block();
+
+        assertThat(withReason.message()).isEqualTo("invalid json");
+        assertThat(fallbackInput.message()).isEqualTo("Validation fallback");
+        assertThat(mediaReason.message()).isEqualTo("Content type not supported");
+        assertThat(mediaFallback.message()).isEqualTo("Validation fallback");
+    }
+
+    @Test
+    void handleKeycloakAuthException_setsStatusAndReturnsUnauthorizedEnvelope() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/auth/login").build());
+        KeycloakAuthException ex = new KeycloakAuthException("Login failed", HttpStatus.UNAUTHORIZED, "invalid_grant");
+
+        AppResponse<Void> response = handler.handleKeycloakAuthException(ex, exchange).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.UNAUTHORIZED.getCode());
+        assertThat(response.message()).isEqualTo("invalid_grant");
+    }
+
+    @Test
+    void handleGeneric_returnsInternalServerErrorEnvelope() {
+        when(messageService.getMessage("api.error.internalServerError")).thenReturn("Internal error");
+
+        AppResponse<Void> response = handler.handleGeneric(new RuntimeException("boom")).block();
+
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode());
+        assertThat(response.message()).isEqualTo("Internal error");
+    }
+
+    static class ValidationDummy {
+        @SuppressWarnings("unused")
+        void submit(String payload) {
+            // No-op helper for MethodParameter construction.
+        }
+    }
+}
+

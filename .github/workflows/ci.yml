@@ -130,3 +130,4 @@ jobs:
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.projectKey=${SONAR_PROJECT_KEY}
           -Dsonar.organization=${SONAR_ORGANIZATION}
+          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco-merged/jacoco.xml
