@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   checks: write
+  actions: write
   pull-requests: write
 
 jobs:
@@ -42,6 +43,7 @@ jobs:
 
       - name: Unit Test Summary
         if: always()
+        id: unit
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +56,7 @@ jobs:
 
       - name: Integration Test Summary
         if: always()
+        id: integration
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,6 +66,29 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
           use-actions-summary: true
+
+      # -----------------------------
+      # PR Comment with test results
+      # -----------------------------
+      - name: Post Test Summary as PR Comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: "Test Results"
+          message: |
+            ## 🧪 Test Results
+
+            ### Unit Tests
+            - Total: ${{ steps.unit.outputs.total }}
+            - Passed: ${{ steps.unit.outputs.passed }}
+            - Failed: ${{ steps.unit.outputs.failed }}
+            - Skipped: ${{ steps.unit.outputs.skipped }}
+
+            ### Integration Tests
+            - Total: ${{ steps.integration.outputs.total }}
+            - Passed: ${{ steps.integration.outputs.passed }}
+            - Failed: ${{ steps.integration.outputs.failed }}
+            - Skipped: ${{ steps.integration.outputs.skipped }}
 
       - name: Upload Unit Test Reports
         if: always()
