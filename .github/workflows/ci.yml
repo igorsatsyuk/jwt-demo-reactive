@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   checks: write
+  pull-requests: write
 
 jobs:
   build:
@@ -45,6 +46,8 @@ jobs:
           path: target/surefire-reports/TEST-*.xml
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
+          comment: true
 
       - name: Integration Test Summary
         if: always()
@@ -55,10 +58,12 @@ jobs:
           path: target/failsafe-reports/TEST-*.xml
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
+          comment: true
 
       - name: Upload Unit Test Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: unit-test-reports
           path: target/surefire-reports/TEST-*.xml
@@ -67,7 +72,7 @@ jobs:
 
       - name: Upload Integration Test Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: integration-test-reports
           path: target/failsafe-reports/TEST-*.xml
