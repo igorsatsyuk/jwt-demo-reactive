@@ -141,6 +141,24 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void update_balance_pessimistic_with_non_positive_client_id_returns_400() {
+        AppResponse<Void> response = withRole("UPDATE_BALANCE")
+                .post()
+                .uri("/api/accounts/balance/pessimistic")
+                .bodyValue(new UpdateBalanceRequest(0L, new BigDecimal("100.00")))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isNotBlank();
+        assertThat(response.message()).containsIgnoringCase("validation");
+    }
+
+    @Test
     void concurrent_pessimistic_updates_apply_all_deltas() {
         Account account = saveAccount("0.00", "+37064444444");
         BigDecimal delta = new BigDecimal("10.00");

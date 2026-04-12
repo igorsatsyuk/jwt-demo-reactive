@@ -143,6 +143,25 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleServerWebInput_invalidUuid_usesTypeMismatchMessage() {
+        when(messageService.getMessage(eq("error.typeMismatch"), any())).thenReturn("Invalid value: not-a-uuid");
+
+        ServerWebInputException ex = mock(ServerWebInputException.class);
+        when(ex.getCause()).thenReturn(new IllegalArgumentException("Invalid UUID string: not-a-uuid"));
+        when(ex.getReason()).thenReturn("reason should be ignored for invalid uuid");
+
+        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("Invalid value: not-a-uuid");
+
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(messageService).getMessage(eq("error.typeMismatch"), argsCaptor.capture());
+        assertThat(argsCaptor.getValue()).containsExactly("not-a-uuid");
+    }
+
+    @Test
     void handleKeycloakAuthException_setsStatusAndReturnsUnauthorizedEnvelope() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/auth/login").build());
         KeycloakAuthException ex = new KeycloakAuthException("Login failed", HttpStatus.UNAUTHORIZED, "invalid_grant");
