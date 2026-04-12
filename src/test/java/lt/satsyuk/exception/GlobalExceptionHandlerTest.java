@@ -202,6 +202,71 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleHandlerMethodValidation_usesDefaultMessage_whenNotMessageKey() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getCodes()).thenReturn(new String[]{"validation.payload.invalid"});
+        when(resolvable.getDefaultMessage()).thenReturn("must not be blank");
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("invalid: must not be blank");
+    }
+
+    @Test
+    void handleHandlerMethodValidation_fallsBackToNextCode_whenLookupFails() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getCodes()).thenReturn(new String[]{"validation.clientId.primary", "validation.clientId.secondary"});
+        when(resolvable.getDefaultMessage()).thenReturn(null);
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+
+        when(messageService.getMessage("validation.clientId.primary", null, Locale.ENGLISH))
+                .thenThrow(new RuntimeException("missing"));
+        when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
+                .thenReturn("ClientId must be greater than 0");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("primary: ClientId must be greater than 0");
+    }
+
+    @Test
+    void handleHandlerMethodValidation_withoutErrors_usesValidationFallbackMessage() {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        when(ex.getParameterValidationResults()).thenReturn(List.of());
+        when(messageService.getMessage("error.validation.failed", null, Locale.ENGLISH)).thenReturn("Validation failed");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("Validation failed");
+        verify(messageService).getMessage("error.validation.failed", null, Locale.ENGLISH);
+    }
+
+    @Test
     void handleKeycloakAuthException_setsStatusAndReturnsUnauthorizedEnvelope() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/auth/login").build());
         KeycloakAuthException ex = new KeycloakAuthException("Login failed", HttpStatus.UNAUTHORIZED, "invalid_grant");
@@ -221,6 +286,121 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode());
         assertThat(response.message()).isEqualTo("Internal error");
+    }
+
+    @Test
+    void handleServerWebInput_bindExceptionInCauseChain_returnsAggregatedFieldValidationMessage() {
+        WebExchangeBindException bindException = mock(WebExchangeBindException.class);
+        when(bindException.getFieldErrors()).thenReturn(List.of(
+                new FieldError("request", "clientId", "must be greater than 0"),
+                new FieldError("request", "amount", "must be greater than 0")
+        ));
+
+        ServerWebInputException ex = mock(ServerWebInputException.class);
+        Throwable nestedCause = mock(Throwable.class);
+        when(nestedCause.getCause()).thenReturn(bindException);
+        when(ex.getCause()).thenReturn(nestedCause);
+        when(ex.getReason()).thenReturn("reason should not be used");
+
+        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("clientId: must be greater than 0; amount: must be greater than 0");
+    }
+
+    @Test
+    void handleServerWebInput_bindExceptionWithEmptyErrors_fallsBackToReason() {
+        WebExchangeBindException bindException = mock(WebExchangeBindException.class);
+        when(bindException.getFieldErrors()).thenReturn(List.of());
+
+        ServerWebInputException ex = mock(ServerWebInputException.class);
+        Throwable nestedCause = mock(Throwable.class);
+        when(nestedCause.getCause()).thenReturn(bindException);
+        when(ex.getCause()).thenReturn(nestedCause);
+        when(ex.getReason()).thenReturn("invalid payload");
+
+        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("invalid payload");
+    }
+
+    @Test
+    void handleHandlerMethodValidation_blankDefaultAndNullCodes_usesValidationFallbackMessage() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getDefaultMessage()).thenReturn("   ");
+        when(resolvable.getCodes()).thenReturn(null);
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+        when(messageService.getMessage("error.validation.failed", null, Locale.ENGLISH)).thenReturn("Validation failed");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).endsWith(": Validation failed");
+        verify(messageService).getMessage("error.validation.failed", null, Locale.ENGLISH);
+    }
+
+    @Test
+    void handleHandlerMethodValidation_allCodeLookupsFail_usesValidationFallbackMessage() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getDefaultMessage()).thenReturn(null);
+        when(resolvable.getCodes()).thenReturn(new String[]{"validation.clientId.primary", "validation.clientId.secondary"});
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+
+        when(messageService.getMessage("validation.clientId.primary", null, Locale.ENGLISH))
+                .thenThrow(new RuntimeException("missing primary"));
+        when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
+                .thenThrow(new RuntimeException("missing secondary"));
+        when(messageService.getMessage("error.validation.failed", null, Locale.ENGLISH)).thenReturn("Validation failed");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("primary: Validation failed");
+        verify(messageService).getMessage("error.validation.failed", null, Locale.ENGLISH);
+    }
+
+    @Test
+    void handleHandlerMethodValidation_withoutCandidateCodeAndParameterName_usesParameterFallback() {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+        MethodParameter methodParameter = mock(MethodParameter.class);
+
+        when(result.getMethodParameter()).thenReturn(methodParameter);
+        when(methodParameter.getParameterName()).thenReturn(null);
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getCodes()).thenReturn(new String[]{"Positive.", "NoDot"});
+        when(resolvable.getDefaultMessage()).thenReturn("must not be blank");
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("parameter: must not be blank");
     }
 
     static class ValidationDummy {
