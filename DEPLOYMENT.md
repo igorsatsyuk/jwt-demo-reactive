@@ -10,8 +10,8 @@
 ### Шаг 1: Подготовка инфраструктуры
 
 ```bash
-# Перейти в корень проекта jwt-demo
-cd <repo-root>/jwt-demo
+# Перейти в корень проекта jwt-demo-reactive
+cd <repo-root>/jwt-demo-reactive
 
 # Скопировать и заполнить переменные окружения
 cp .env.example .env
