@@ -21,7 +21,7 @@ services:
     container_name: jwt-reactive-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?KEYCLOAK_ADMIN_USER is required}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
       KC_HEALTH_ENABLED: "true"
     ports:
@@ -87,7 +87,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
     volumes:
       - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -107,8 +107,8 @@ services:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME}
-      KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-jwt-demo-reactive}
+      KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL:-http://keycloak:8080}
       KEYCLOAK_RESOURCE_CLIENT_ID: ${KEYCLOAK_RESOURCE_CLIENT_ID}
       KEYCLOAK_RESOURCE_CLIENT_SECRET: ${KEYCLOAK_RESOURCE_CLIENT_SECRET:?KEYCLOAK_RESOURCE_CLIENT_SECRET is required}
       APP_DB_NAME: ${APP_DB_NAME:?APP_DB_NAME is required}
