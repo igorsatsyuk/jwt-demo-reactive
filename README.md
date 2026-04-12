@@ -88,6 +88,15 @@ docker compose down -v
 
 ### 2. Alternative Local Run (without app container)
 
+When running via `mvn spring-boot:run`, `.env` is not auto-loaded by Spring Boot.
+Set required variables in your shell first (note the host Keycloak URL):
+
+```pwsh
+$env:KEYCLOAK_RESOURCE_CLIENT_ID = "resource-server"
+$env:KEYCLOAK_RESOURCE_CLIENT_SECRET = "<secret-from-realm-export-or-keycloak>"
+$env:KEYCLOAK_AUTH_SERVER_URL = "http://localhost:8080"
+```
+
 ```pwsh
 Set-Location <repo-root>
 docker compose up -d postgres keycloak

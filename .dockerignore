@@ -1,0 +1,17 @@
+.git
+.gitignore
+.idea
+.vscode
+target
+*.iml
+*.log
+.env
+.env.*
+ops
+docs
+README.md
+ROADMAP.md
+DEPLOYMENT.md
+HELP.md
+AGENTS.md
+
