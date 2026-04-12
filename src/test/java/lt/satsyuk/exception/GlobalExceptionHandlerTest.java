@@ -403,6 +403,33 @@ class GlobalExceptionHandlerTest {
         assertThat(response.message()).isEqualTo("parameter: must not be blank");
     }
 
+    @Test
+    void handleHandlerMethodValidation_missingBracedDefaultKey_fallsBackToCodes() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getDefaultMessage()).thenReturn("{validation.missing.key}");
+        when(resolvable.getCodes()).thenReturn(new String[]{"validation.clientId.secondary"});
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+
+        when(messageService.getMessage("validation.missing.key", null, Locale.ENGLISH))
+                .thenThrow(new RuntimeException("missing key"));
+        when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
+                .thenReturn("ClientId must be greater than 0");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("secondary: ClientId must be greater than 0");
+    }
+
     static class ValidationDummy {
         @SuppressWarnings("unused")
         void submit(String payload) {

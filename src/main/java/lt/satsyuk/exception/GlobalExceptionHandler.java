@@ -168,7 +168,13 @@ public class GlobalExceptionHandler {
         String defaultMessage = resolvable.getDefaultMessage();
         if (defaultMessage != null && defaultMessage.startsWith("{") && defaultMessage.endsWith("}")) {
             String key = defaultMessage.substring(1, defaultMessage.length() - 1);
-            return messageService.getMessage(key, null, locale);
+            try {
+                return messageService.getMessage(key, null, locale);
+            } catch (RuntimeException lookupError) {
+                // Missing message key must not fail the exception handler itself.
+                log.debug("Failed to resolve default validation key '{}' for locale '{}', continuing with fallbacks", key, locale, lookupError);
+                defaultMessage = null;
+            }
         }
         if (defaultMessage != null && !defaultMessage.isBlank()) {
             return defaultMessage;
