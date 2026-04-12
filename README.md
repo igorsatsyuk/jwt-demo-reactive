@@ -47,7 +47,7 @@ This project keeps the same business scenarios as `jwt-demo`, but the implementa
 Create `.env` from the template:
 
 ```pwsh
-Set-Location "C:\Users\igors\IdeaProjects\jwt-demo-reactive"
+Set-Location <repo-root>
 Copy-Item .env.example .env
 ```
 
@@ -64,7 +64,7 @@ Resource server introspection credentials must match the Keycloak realm import (
 ### 1. Start Full Stack (Docker Compose)
 
 ```pwsh
-Set-Location "C:\Users\igors\IdeaProjects\jwt-demo-reactive"
+Set-Location <repo-root>
 docker compose up -d --build
 ```
 
@@ -89,7 +89,7 @@ docker compose down -v
 ### 2. Alternative Local Run (without app container)
 
 ```pwsh
-Set-Location "C:\Users\igors\IdeaProjects\jwt-demo-reactive"
+Set-Location <repo-root>
 docker compose up -d postgres keycloak
 mvn spring-boot:run
 ```

@@ -6,7 +6,7 @@ providers:
     folder: JWT Demo Reactive
     type: file
     disableDeletion: false
-    allowUiUpdates: true
+    allowUiUpdates: false
     updateIntervalSeconds: 30
     options:
       path: /etc/grafana/provisioning/dashboards/json

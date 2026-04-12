@@ -3,15 +3,15 @@ services:
     image: postgres:16-alpine
     container_name: jwt-reactive-postgres
     environment:
-      POSTGRES_DB: ${APP_DB_NAME}
-      POSTGRES_USER: ${APP_DB_USER}
+      POSTGRES_DB: ${APP_DB_NAME:?APP_DB_NAME is required}
+      POSTGRES_USER: ${APP_DB_USER:?APP_DB_USER is required}
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:?APP_DB_USER is required} -d ${APP_DB_NAME:?APP_DB_NAME is required}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -111,11 +111,11 @@ services:
       KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL}
       KEYCLOAK_RESOURCE_CLIENT_ID: ${KEYCLOAK_RESOURCE_CLIENT_ID}
       KEYCLOAK_RESOURCE_CLIENT_SECRET: ${KEYCLOAK_RESOURCE_CLIENT_SECRET:?KEYCLOAK_RESOURCE_CLIENT_SECRET is required}
-      APP_DB_NAME: ${APP_DB_NAME}
-      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_NAME: ${APP_DB_NAME:?APP_DB_NAME is required}
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT}
-      MANAGEMENT_OTLP_LOGGING_ENDPOINT: ${MANAGEMENT_OTLP_LOGGING_ENDPOINT}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
+      MANAGEMENT_OTLP_LOGGING_ENDPOINT: ${MANAGEMENT_OTLP_LOGGING_ENDPOINT:-http://otel-collector:4318/v1/logs}
     ports:
       - "8081:8081"
 
