@@ -1,6 +1,7 @@
 package lt.satsyuk.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.repository.RequestRepository;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ class RequestServiceTest {
             requestRepository,
             clientService,
             new ObjectMapper(),
-            messageService
+            messageService,
+            new SimpleMeterRegistry()
     );
 
     @Test

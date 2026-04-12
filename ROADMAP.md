@@ -17,8 +17,12 @@
 
 ## Medium
 
-- [ ] Оценить необходимость Quartz/распределенного lock для multi-instance request worker
-- [ ] Подготовить критерии выбора single-instance vs distributed lock
+- [x] Оценить необходимость Quartz/распределенного lock для multi-instance request worker
+- [x] Подготовить критерии выбора single-instance vs distributed lock
+- [x] Добавить reclaim stale `PROCESSING` в worker (timeout-based requeue без Quartz)
+- [x] Добавить reclaim-метрики `reclaimed_count` и `stale_processing_age`
+- [x] Добавить индекс под reclaim-фильтр (`status`, `type`, `status_changed_at`)
+- [x] Добавить 2-instance IT (два контекста против одной БД) для проверки отсутствия дублей `request.id`
 - [ ] Дополнительные проверки валидации и сообщений ошибок для account/request API
 - [ ] Финализировать API docs (Swagger/OpenAPI)
 - [ ] Performance: оптимизация запросов и оценка кэширования

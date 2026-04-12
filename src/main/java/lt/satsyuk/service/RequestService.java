@@ -2,6 +2,9 @@ package lt.satsyuk.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
@@ -13,7 +16,6 @@ import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -30,7 +32,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RequestService {
 
@@ -39,6 +40,26 @@ public class RequestService {
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
+    private final Counter reclaimedCount;
+    private final DistributionSummary staleProcessingAgeSeconds;
+
+    public RequestService(RequestRepository requestRepository,
+                          ClientService clientService,
+                          ObjectMapper objectMapper,
+                          MessageService messageService,
+                          MeterRegistry meterRegistry) {
+        this.requestRepository = requestRepository;
+        this.clientService = clientService;
+        this.objectMapper = objectMapper;
+        this.messageService = messageService;
+        this.reclaimedCount = Counter.builder("request.worker.reclaimed_count")
+                .description("Number of stale PROCESSING requests reclaimed back to PENDING")
+                .register(meterRegistry);
+        this.staleProcessingAgeSeconds = DistributionSummary.builder("request.worker.stale_processing_age")
+                .baseUnit("seconds")
+                .description("Age in seconds of the oldest reclaimed stale PROCESSING request")
+                .register(meterRegistry);
+    }
 
     @Value("${app.request.worker.batch-size:10}")
     private int workerBatchSize;
@@ -48,6 +69,9 @@ public class RequestService {
 
     @Value("${app.request.worker.retry.backoff-ms:200}")
     private long workerRetryBackoffMs;
+
+    @Value("${app.request.worker.processing-timeout:2m}")
+    private Duration workerProcessingTimeout;
 
     public Mono<RequestAcceptedResponse> submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
@@ -120,8 +144,33 @@ public class RequestService {
 
     private Mono<Void> claimAndProcessBatch() {
         OffsetDateTime claimedAt = now();
-        return requestRepository.claimPendingClientCreateBatch(workerBatchSize, claimedAt)
+        return reclaimStaleProcessingRequests(claimedAt)
+                .thenMany(requestRepository.claimPendingClientCreateBatch(workerBatchSize, claimedAt))
                 .concatMap(this::processClaimedRequest)
+                .then();
+    }
+
+    private Mono<Void> reclaimStaleProcessingRequests(OffsetDateTime now) {
+        if (workerProcessingTimeout == null || workerProcessingTimeout.isZero() || workerProcessingTimeout.isNegative()) {
+            return Mono.empty();
+        }
+
+        OffsetDateTime staleBefore = now.minus(workerProcessingTimeout);
+        return requestRepository.findMaxStaleClientCreateAgeSeconds(staleBefore, now)
+                .defaultIfEmpty(0L)
+                .flatMap(maxAgeSeconds -> requestRepository.reclaimStaleClientCreateRequests(staleBefore, now)
+                        .doOnNext(reclaimed -> {
+                            if (reclaimed > 0) {
+                                reclaimedCount.increment(reclaimed);
+                                staleProcessingAgeSeconds.record(maxAgeSeconds.doubleValue());
+                                log.warn(
+                                        "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
+                                        reclaimed,
+                                        workerProcessingTimeout,
+                                        maxAgeSeconds
+                                );
+                            }
+                        }))
                 .then();
     }
 

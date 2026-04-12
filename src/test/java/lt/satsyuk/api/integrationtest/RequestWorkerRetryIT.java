@@ -75,6 +75,11 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
 
+        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
+                .thenReturn(Mono.just(0L));
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(0));
+
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
                     if (subscribeAttempts.getAndIncrement() == 0) {
@@ -105,6 +110,11 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
     void worker_exhausts_retry_and_logs_final_error_without_mark_completed(CapturedOutput output) {
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
 
+        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
+                .thenReturn(Mono.just(0L));
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(0));
+
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
                     subscribeAttempts.incrementAndGet();
@@ -131,6 +141,11 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
     @Test
     void worker_does_not_retry_on_non_transient_error_and_logs_final_error(CapturedOutput output) {
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
+
+        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
+                .thenReturn(Mono.just(0L));
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(0));
 
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
