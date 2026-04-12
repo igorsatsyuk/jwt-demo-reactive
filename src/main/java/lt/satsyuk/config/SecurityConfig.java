@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .logout(ServerHttpSecurity.LogoutSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/actuator/prometheus").permitAll()
+                        .pathMatchers("/actuator/health/**", "/actuator/info", "/actuator/metrics/**").permitAll()
                         .pathMatchers("/api/auth/**").permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyExchange().authenticated()

@@ -1,117 +1,459 @@
-# jwt-demo-reactive
+# 🔐 jwt-demo-reactive
 
-Реактивный портированный проект на базе Spring Boot 4 / Java 25 с поддержкой WebFlux, R2DBC и OAuth2.
+Reactive OAuth2 proxy/service built with Spring Boot 4 + Java 25, using WebFlux, R2DBC, Keycloak, and OTLP-first observability.
 
-## Стек
+This project keeps the same business scenarios as `jwt-demo`, but the implementation is fully reactive:
+- WebFlux controllers (`Mono<AppResponse<...>>`)
+- R2DBC + PostgreSQL persistence
+- Async request lifecycle (`PENDING -> PROCESSING -> COMPLETED|FAILED`)
+- Security chain with Opaque Token Introspection + DPoP + Rate Limiting
+
+---
+
+## ✨ Supported Features
+
+- Username/password login, token refresh, logout (`/api/auth/*`)
+- Opaque token introspection for protected APIs
+- DPoP support for auth endpoints and protected endpoints
+- Role-based authorization (`CLIENT_CREATE`, `CLIENT_GET`, `CLIENT_SEARCH`, `UPDATE_BALANCE`)
+- Async client creation request queue + status endpoint
+- Account balance updates (pessimistic and optimistic flows)
+- OTLP-first observability:
+  - traces: Spring Boot -> OTel Collector -> Tempo
+  - logs: Spring Boot -> OTel Collector -> Loki
+  - metrics: Prometheus scrapes `/actuator/prometheus`
+
+---
+
+## 📦 Tech Stack
 
 - Java 25
 - Spring Boot 4.0.3
-- Spring WebFlux (реактивный веб-стек)
-- Spring Security + OAuth2 Resource Server
-- PostgreSQL
-- R2DBC (реактивный доступ к БД)
-- Flyway (миграции БД)
-- MapStruct (маппинг сущностей)
-- Lombok (уменьшение boilerplate кода)
-- Bucket4j (rate limiting)
-- Testcontainers (интеграционное тестирование)
+- Spring WebFlux
+- Spring Security OAuth2 Resource Server
+- PostgreSQL + Flyway
+- Spring Data R2DBC
+- Bucket4j + Caffeine
+- OpenTelemetry + Micrometer + Prometheus
+- Grafana + Loki + Tempo + OTel Collector
+- Testcontainers + WireMock + Awaitility
 
-## Где находится проект
+---
 
-`<repo-root>/jwt-demo-reactive`
+## 🚀 Running the Project
 
-## Быстрый запуск
+### 0. Configure Environment Variables
 
-### Компиляция
+Create `.env` from the template:
+
 ```pwsh
-Set-Location ".\jwt-demo-reactive"
-mvn clean compile -DskipTests
+Set-Location <repo-root>
+Copy-Item .env.example .env
 ```
 
-### Локальный запуск (требует Docker)
-```pwsh
-# 1. В корне jwt-demo запустить инфраструктуру
-docker compose up -d postgres postgres-app keycloak
+Set real values for secrets in `.env`:
+- `APP_DB_PASSWORD`
+- `KEYCLOAK_ADMIN_PASSWORD`
+- `KEYCLOAK_RESOURCE_CLIENT_SECRET`
+- `GRAFANA_ADMIN_PASSWORD`
 
-# 2. Запустить реактивное приложение
+Resource server introspection credentials must match the Keycloak realm import (`src/test/resources/keycloak/realm-export.json`):
+- `KEYCLOAK_RESOURCE_CLIENT_ID`
+- `KEYCLOAK_RESOURCE_CLIENT_SECRET`
+
+### 1. Start Full Stack (Docker Compose)
+
+```pwsh
+Set-Location <repo-root>
+docker compose up -d --build
+```
+
+Check status:
+
+```pwsh
+docker compose ps
+```
+
+Stop:
+
+```pwsh
+docker compose down
+```
+
+Stop and remove volumes:
+
+```pwsh
+docker compose down -v
+```
+
+### 2. Alternative Local Run (without app container)
+
+When running via `mvn spring-boot:run`, `.env` is not auto-loaded by Spring Boot.
+Set required variables in your shell first (note the host Keycloak URL):
+
+```pwsh
+$env:KEYCLOAK_RESOURCE_CLIENT_ID = "resource-server"
+$env:KEYCLOAK_RESOURCE_CLIENT_SECRET = "<secret-from-realm-export-or-keycloak>"
+$env:KEYCLOAK_AUTH_SERVER_URL = "http://localhost:8080"
+```
+
+```pwsh
+Set-Location <repo-root>
+docker compose up -d postgres keycloak
 mvn spring-boot:run
 ```
 
-### Проверка тестов
-```pwsh
-# Unit-тесты
-mvn test
+---
 
-# Интеграционные тесты (требует Docker)
-mvn verify
+## 🧱 Compose Services
 
-# Точечный прогон auth/security-интеграций
-mvn -DskipTests=false "-Dit.test=KeycloakIntegrationIT,KeycloakNegativeIT,AuthValidationIT,DpopIntegrationIT,RateLimitingIT,SecurityChainRegressionIT" verify
+- `app` - application (`:8081`)
+- `postgres` - database (`:5432`)
+- `keycloak` - auth server (`:8080`)
+- `prometheus` - metrics (`:9090`)
+- `grafana` - dashboards (`:3000`)
+- `loki` - logs (`:3100`)
+- `tempo` - traces (`:3200`)
+- `otel-collector` - OTLP ingest/export
+
+---
+
+## 🌐 Useful URLs
+
+- API base: `http://localhost:8081`
+- Swagger UI: `http://localhost:8081/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8081/v3/api-docs`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+- Loki readiness: `http://localhost:3100/ready`
+- Tempo: `http://localhost:3200`
+- App metrics endpoint: `http://localhost:8081/actuator/prometheus`
+
+---
+
+## 📚 Swagger / OpenAPI
+
+The OpenAPI spec is generated at runtime.
+
+Helpful links:
+- Swagger UI: `http://localhost:8081/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8081/v3/api-docs`
+
+Tip: use Swagger UI for quick token-based checks after login (`/api/auth/login`), then call protected endpoints with `Bearer` or `DPoP` authorization.
+
+---
+
+## 🛡 Security Model
+
+Public routes:
+- `/api/auth/**`
+- `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
+- `/actuator/prometheus`
+
+All other routes require authentication.
+
+Authorization options:
+- `Authorization: Bearer <access_token>`
+- `Authorization: DPoP <access_token>` and `DPoP: <proof-jwt>`
+
+---
+
+## 🎯 API Access Matrix
+
+| Endpoint | Method | Access | Required Role |
+|----------|--------|--------|---------------|
+| `/api/auth/login` | `POST` | Public | - |
+| `/api/auth/refresh` | `POST` | Public | - |
+| `/api/auth/logout` | `POST` | Public | - |
+| `/api/clients` | `POST` | Protected | `CLIENT_CREATE` |
+| `/api/clients/{id}` | `GET` | Protected | `CLIENT_GET` |
+| `/api/clients/search` | `GET` | Protected | `CLIENT_SEARCH` |
+| `/api/requests/{id}` | `GET` | Protected | `CLIENT_CREATE` |
+| `/api/accounts/balance/pessimistic` | `POST` | Protected | `UPDATE_BALANCE` |
+| `/api/accounts/balance/optimistic` | `POST` | Protected | `UPDATE_BALANCE` |
+| `/api/accounts/client/{clientId}` | `GET` | Protected | `CLIENT_GET` |
+
+---
+
+## 🛡 Protected Endpoints
+
+| Endpoint | Method | Required Role | Accepted Auth Scheme |
+|----------|--------|---------------|----------------------|
+| `/api/clients` | `POST` | `CLIENT_CREATE` | `Bearer` or `DPoP` |
+| `/api/requests/{id}` | `GET` | `CLIENT_CREATE` | `Bearer` or `DPoP` |
+| `/api/clients/{id}` | `GET` | `CLIENT_GET` | `Bearer` or `DPoP` |
+| `/api/clients/search` | `GET` | `CLIENT_SEARCH` | `Bearer` or `DPoP` |
+| `/api/accounts/client/{clientId}` | `GET` | `CLIENT_GET` | `Bearer` or `DPoP` |
+| `/api/accounts/balance/pessimistic` | `POST` | `UPDATE_BALANCE` | `Bearer` or `DPoP` |
+| `/api/accounts/balance/optimistic` | `POST` | `UPDATE_BALANCE` | `Bearer` or `DPoP` |
+
+---
+
+## 📊 Sequence Diagram (Login / Refresh / Logout)
+
+```text
+===========================================================
+                       LOGIN FLOW
+===========================================================
+
+Client
+  |
+  | 1. POST /api/auth/login
+  |    { username, password, clientId, clientSecret }
+  v
+Spring Boot (AuthController)
+  |
+  | 2. KeycloakReactiveAuthService.login()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/token
+  |      grant_type=password
+  |      username, password
+  |      client_id, client_secret
+  |
+  | 4. 200 OK
+  |      { access_token, refresh_token }
+  v
+Spring Boot
+  |
+  | 5. Wrap into AppResponse
+  v
+Client
 ```
 
-Подтвержденные интеграционные сценарии:
-- `KeycloakIntegrationIT` — auth happy-path (login/refresh/logout) с реальным Keycloak
-- `KeycloakNegativeIT` — негативные upstream сценарии через WireMock
-- `AuthValidationIT` — unsupported media type для `POST /api/auth/login`
-- `DpopIntegrationIT` — DPoP для `/api/auth/**` + DPoP-bound protected endpoint (включая replay/без proof)
-- `RateLimitingIT` — порядок правил (`order`), key strategy (`IP`, `CLIENT_ID`) и i18n сообщений 429 (`en`/`ru`)
-- `SecurityChainRegressionIT` — отсутствие двойной обработки security-фильтров (DPoP/RateLimit single-pass)
-- `RequestIntegrationIT` — async request lifecycle через scheduler-worker (`PENDING -> COMPLETED|FAILED`) и nested response payload
-- `RequestWorkerRetryIT` — retry/backoff сценарии worker-а (success-after-retry, retry exhaustion, no-retry for non-transient)
-- `RequestIntegrationIT` (edge-cases) — `/api/requests/{id}`: `404 not found`, `400 invalid UUID`, `403 forbidden`, idempotent terminal status
-- `AccountIntegrationIT` (concurrency) — concurrent optimistic/pessimistic balance update
+```text
+===========================================================
+                      REFRESH FLOW
+===========================================================
 
-## 📊 Что уже портировано
+Client
+  |
+  | 1. POST /api/auth/refresh
+  |    { refreshToken, clientId, clientSecret }
+  v
+Spring Boot
+  |
+  | 2. KeycloakReactiveAuthService.refresh()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/token
+  |      grant_type=refresh_token
+  |      refresh_token
+  |      client_id, client_secret
+  |
+  | 4. 200 OK
+  |      { new_access_token, new_refresh_token }
+  v
+Spring Boot
+  |
+  | 5. Wrap into AppResponse
+  v
+Client
+```
 
-✅ **Аутентификация**
-- KeycloakReactiveAuthService (полная реактивная логика login/refresh/logout)
-- AuthController (/api/auth/*)
-- Поддержка DPoP proofs
-- Миcrometer счетчики для мониторинга
+```text
+===========================================================
+                      LOGOUT FLOW
+===========================================================
 
-✅ **Управление клиентами**
-- ClientService (создание, получение, поиск)
-- ClientController (/api/clients/*)
-- ClientMapper (MapStruct интеграция)
-- Автоматическое создание связанного Account
+Client
+  |
+  | 1. POST /api/auth/logout
+  |    { refreshToken, clientId, clientSecret }
+  v
+Spring Boot
+  |
+  | 2. KeycloakReactiveAuthService.logout()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/logout
+  |      client_id, client_secret
+  |      refresh_token
+  |
+  | 4. 200 OK (Keycloak behavior)
+  v
+Spring Boot
+  |
+  | 5. Return AppResponse(code=0)
+  v
+Client
+```
 
-✅ **Асинхронная обработка**
-- RequestService (управление состояниями запросов)
-- RequestController (/api/requests/{id})
-- Состояния: PENDING → PROCESSING → COMPLETED|FAILED
+---
 
-✅ **Security фильтры**
-- RateLimitingWebFilter (Bucket4j интеграция)
-- DpopAuthenticationWebFilter (DPoP валидация)
-- TraceIdResponseHeaderWebFilter (трассировка)
+## 📬 Asynchronous Client Creation Flow
 
-✅ **Инфраструктура**
-- WebClientConfig (реактивный HTTP клиент)
-- SecurityService (интеграция с ReactiveSecurityContextHolder)
-- GlobalExceptionHandler (единая обработка ошибок)
+`POST /api/clients` does not create a client synchronously.
 
-✅ **Интеграционные auth/security тесты**
-- KeycloakIntegrationIT (real Keycloak Testcontainer)
-- KeycloakNegativeIT (WireMock stubs)
-- AuthValidationIT (unsupported media type)
-- DpopIntegrationIT (auth + protected endpoints)
-- RateLimitingIT (rule order, keys, 429 i18n)
-- SecurityChainRegressionIT (отсутствие двойной обработки фильтров)
-- RequestIntegrationIT (scheduler lifecycle request)
-- RequestWorkerRetryIT (retry/backoff policy + log assertions)
+1. API validates request payload.
+2. A `request` row is inserted with `type=CLIENT_CREATE` and `status=PENDING`.
+3. Worker claims pending rows using `FOR UPDATE SKIP LOCKED`.
+4. Claimed rows move to `PROCESSING`.
+5. On success: status becomes `COMPLETED`, response JSON is stored.
+6. On failure: status becomes `FAILED`, error JSON is stored.
+7. Caller polls `GET /api/requests/{id}` until terminal status.
 
-✅ **Общие test utility**
-- `TestTextUtils` для консистентных text/log assertions в IT
+For multi-instance safety, stale `PROCESSING` reclaim is implemented and indexed (`V2__add_request_reclaim_index.sql`).
 
-## 🎯 Приоритеты
+---
 
-Канонический список приоритетов: [`ROADMAP.md`](ROADMAP.md).
+## 🌱 Seed Data / Performance Notes
 
-## 📌 Единый статус-блок (актуально на 2026-04-10)
+### Seed data
 
-Канонический статус проекта: [`STATUS_SNAPSHOT.md`](STATUS_SNAPSHOT.md).
-## 🔗 Дополнительная информация
+- Keycloak realm is auto-imported from `src/test/resources/keycloak/realm-export.json`.
+- Demo users included in realm import:
+  - `user` / `password`
+  - `admin` / `admin`
+- Demo clients in realm import include:
+  - `spring-app`
+  - `resource-server` (used for opaque token introspection)
 
-- **PROGRESS.md** — Детальный список портированных компонентов и технических деталей
-- **ROADMAP.md** — Единый список приоритетов (`High/Medium/Low`)
-- **AGENTS.md** (главный проект) — Архитектурные паттерны и описание проекта
+### Performance notes
+
+- Client search supports trigram indexes if `pg_trgm` extension exists; migration creates indexes conditionally.
+- Async worker tunables are configurable in `application.properties`:
+  - `app.request.worker.batch-size`
+  - `app.request.worker.interval-ms`
+  - `app.request.worker.retry.max-attempts`
+  - `app.request.worker.retry.backoff-ms`
+  - `app.request.worker.processing-timeout`
+- Reclaim path is optimized by index:
+  - `idx_request_status_type_status_changed_at` on `(status, type, status_changed_at)`
+
+---
+
+## 📊 Observability (OTLP-first)
+
+Telemetry pipelines:
+- traces: `management.otlp.tracing.endpoint`
+- logs: `management.otlp.logging.endpoint`
+- metrics: Prometheus scrape `/actuator/prometheus`
+
+Recommended settings:
+- `management.logging.export.otlp.enabled=true`
+- `management.otlp.metrics.export.enabled=false`
+- `management.tracing.sampling.probability=1.0`
+
+```mermaid
+flowchart LR
+  subgraph App[Spring Boot jwt-demo-reactive]
+    A1[HTTP metrics\nActuator /prometheus]
+    A2[Traces OTLP\nmanagement.otlp.tracing.endpoint]
+    A3[Logs OTLP\nmanagement.otlp.logging.endpoint]
+  end
+
+  subgraph Infra[Observability Infra]
+    C[OTel Collector]
+    T[Tempo]
+    L[Loki]
+    P[Prometheus]
+    G[Grafana]
+  end
+
+  A1 -->|pull /actuator/prometheus| P
+  A2 -->|OTLP traces| C
+  A3 -->|OTLP logs| C
+  C -->|traces| T
+  C -->|logs| L
+
+  P --> G
+  T --> G
+  L --> G
+```
+
+---
+
+## 📊 Alert Thresholds and On-Call Runbook
+
+The following alerts are provisioned from `ops/grafana/provisioning/alerting/alerts.yml`.
+
+| Alert UID | Signal | Threshold | For | Severity |
+|----------|--------|-----------|-----|----------|
+| `jwt-high-5xx-rate` | 5xx error rate | `> 5%` | `5m` | `warning` |
+| `jwt-high-p95-latency` | p95 HTTP latency | `> 800 ms` | `5m` | `warning` |
+| `jwt-high-cpu-saturation` | process CPU usage | `> 90%` | `10m` | `critical` |
+| `jwt-high-heap-saturation` | JVM heap usage | `> 90%` | `10m` | `critical` |
+
+On-call quick actions:
+1. Open Grafana and locate the firing rule in Alerting.
+2. Check RED and saturation dashboards for trend confirmation.
+3. For request-level incidents, capture `X-Trace-Id` (when available) and pivot to Tempo and Loki.
+4. In Loki, filter by the same trace id and inspect related error/security logs.
+5. In Tempo, inspect the slow/error spans and identify the failing upstream or handler.
+6. For `critical` alerts (`CPU`/`Heap`), page immediately if sustained beyond the configured `for` window.
+7. For `warning` alerts, escalate if impact persists for two consecutive evaluation windows.
+
+---
+
+## 🧪 Testing
+
+Run unit tests:
+
+```pwsh
+mvn test
+```
+
+Run integration tests:
+
+```pwsh
+mvn verify
+```
+
+Main integration suites:
+- `AuthControllerIT`
+- `AuthValidationIT`
+- `KeycloakIntegrationIT`
+- `KeycloakNegativeIT`
+- `DpopIntegrationIT`
+- `RateLimitingIT`
+- `SecurityChainRegressionIT`
+- `RequestIntegrationIT`
+- `RequestWorkerRetryIT`
+- `RequestWorkerReclaimIT`
+- `RequestWorkerMultiInstanceIT`
+- `AccountIntegrationIT`
+
+---
+
+## 🧱 Project Structure
+
+- `src/main/java/lt/satsyuk/controller` - REST entry points
+- `src/main/java/lt/satsyuk/service` - business logic
+- `src/main/java/lt/satsyuk/repository` - R2DBC repositories
+- `src/main/resources/db/migration` - Flyway migrations
+- `ops/` - observability configs (Prometheus/Loki/Tempo/OTel/Grafana)
+- `docker-compose.yml` - local infrastructure stack
+
+---
+
+# 🛠 Troubleshooting
+
+- `401 invalid_client` on protected API: verify `KEYCLOAK_RESOURCE_CLIENT_ID` / `KEYCLOAK_RESOURCE_CLIENT_SECRET`.
+- `403` on protected API: verify token roles in `realm_access.roles`.
+- No logs/traces in Grafana: verify `MANAGEMENT_OTLP_TRACING_ENDPOINT` and `MANAGEMENT_OTLP_LOGGING_ENDPOINT`.
+- Integration tests fail without Docker: start Docker Desktop before `mvn verify`.
+
+### DPoP 401/403 checklist
+
+- For DPoP-bound tokens, send both headers:
+  - `Authorization: DPoP <access_token>`
+  - `DPoP: <proof-jwt>`
+- Validate proof claims and binding:
+  - `htm` and `htu` must match the exact request method and URL
+  - `iat` must be within allowed time window
+  - `jti` must be unique (replay protection)
+  - `ath` must match the access token hash
+  - token `cnf.jkt` must match proof key thumbprint
+
+### Trace-ID correlation for incidents
+
+- When the API returns `X-Trace-Id`, use it as the primary correlation key.
+- In Loki, filter by trace id from logs (MDC includes `traceId`/`spanId`).
+- In Tempo, search by the same trace id to inspect span timeline.
+- This is the fastest path to diagnose `401`, `403`, and `429` scenarios across API + security filters.
+
+---
