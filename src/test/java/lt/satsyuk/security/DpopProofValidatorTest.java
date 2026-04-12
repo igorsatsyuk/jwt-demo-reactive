@@ -26,6 +26,7 @@ class DpopProofValidatorTest {
     private static final String METHOD = "GET";
     private static final String REQUEST_URI = "https://api.example.com/resource?x=1";
     private static final String ACCESS_TOKEN = "access-token-value";
+    private static final RSAKey TEST_RSA_JWK = generateTestRsaJwk();
 
     private final DpopProofValidator validator = new DpopProofValidator(defaultProperties());
 
@@ -168,7 +169,7 @@ class DpopProofValidatorTest {
                                         Instant iat,
                                         String jti,
                                         String typ) throws Exception {
-        RSAKey rsaJwk = new RSAKeyGenerator(2048).keyID("k1").generate();
+        RSAKey rsaJwk = TEST_RSA_JWK;
 
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
                 .type(new JOSEObjectType(typ))
@@ -190,7 +191,7 @@ class DpopProofValidatorTest {
     }
 
     private static ProofData buildProofWithoutHtu() throws Exception {
-        RSAKey rsaJwk = new RSAKeyGenerator(2048).keyID("k2").generate();
+        RSAKey rsaJwk = TEST_RSA_JWK;
 
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
                 .type(new JOSEObjectType("dpop+jwt"))
@@ -214,6 +215,14 @@ class DpopProofValidatorTest {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hash = digest.digest(accessToken.getBytes(StandardCharsets.US_ASCII));
         return com.nimbusds.jose.util.Base64URL.encode(hash).toString();
+    }
+
+    private static RSAKey generateTestRsaJwk() {
+        try {
+            return new RSAKeyGenerator(2048).keyID("k1").generate();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to generate test RSA key", ex);
+        }
     }
 
     private record ProofData(String serializedJwt, String jkt) {
