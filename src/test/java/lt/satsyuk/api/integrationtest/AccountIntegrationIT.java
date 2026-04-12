@@ -156,7 +156,10 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
         assertThat(response.message()).contains("clientId:");
         assertThat(response.message()).contains("ClientId");
+<<<<<<< HEAD
         assertThat(response.message()).contains("greater than 0");
+=======
+>>>>>>> efa142c (test: relax non-positive clientId assertion for locale-safe validation)
     }
 
     @Test
