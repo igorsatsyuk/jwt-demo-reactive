@@ -4,18 +4,24 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.context.NoSuchMessageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ServerWebInputException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.UnsupportedMediaTypeStatusException;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import reactor.core.publisher.Mono;
+
+import java.util.Locale;
 
 @Slf4j
 @RestControllerAdvice
@@ -23,8 +29,8 @@ import reactor.core.publisher.Mono;
 public class GlobalExceptionHandler {
 
     private static final String VALIDATION_FAILED_MESSAGE_KEY = "error.validation.failed";
+    private static final String INVALID_UUID_PREFIX = "Invalid UUID string: ";
 
-    private final MessageSource messageSource;
     private final MessageService messageService;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -34,6 +40,19 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
                 .orElseGet(() -> messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY));
+
+        return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), errorMessage));
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Mono<AppResponse<Void>> handleHandlerMethodValidation(HandlerMethodValidationException ex, ServerWebExchange exchange) {
+        Locale locale = resolveLocale(exchange);
+        String errorMessage = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> resolveParameterName(result, error) + ": " + resolveLocalizedMessage(error, locale)))
+                .reduce((a, b) -> a + "; " + b)
+                .orElseGet(() -> messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY, null, locale));
 
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), errorMessage));
     }
@@ -89,9 +108,112 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ServerWebInputException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Mono<AppResponse<Void>> handleServerWebInput(ServerWebInputException ex) {
-        String message = ex.getReason() != null ? ex.getReason() : messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
+    public Mono<AppResponse<Void>> handleServerWebInput(ServerWebInputException ex, ServerWebExchange exchange) {
+        Locale locale = resolveLocale(exchange);
+        String bindValidationMessage = extractBindValidationMessage(ex);
+        if (bindValidationMessage != null) {
+            return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), bindValidationMessage));
+        }
+
+        String invalidUuid = extractInvalidUuidValue(ex);
+        String message;
+        if (invalidUuid != null) {
+            message = messageService.getMessage("error.typeMismatch", new Object[]{invalidUuid}, locale);
+        } else if (ex.getReason() != null) {
+            message = ex.getReason();
+        } else {
+            message = messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY, null, locale);
+        }
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
+    }
+
+    private String extractBindValidationMessage(ServerWebInputException ex) {
+        WebExchangeBindException bindException = null;
+        if (ex instanceof WebExchangeBindException casted) {
+            bindException = casted;
+        } else {
+            Throwable current = ex.getCause();
+            while (current != null) {
+                if (current instanceof WebExchangeBindException casted) {
+                    bindException = casted;
+                    break;
+                }
+                current = current.getCause();
+            }
+        }
+
+        if (bindException == null) {
+            return null;
+        }
+
+        return bindException.getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse(null);
+    }
+
+    private String extractInvalidUuidValue(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof IllegalArgumentException illegalArgumentException) {
+                String message = illegalArgumentException.getMessage();
+                if (message != null && message.startsWith(INVALID_UUID_PREFIX)) {
+                    return message.substring(INVALID_UUID_PREFIX.length()).trim();
+                }
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    private String resolveLocalizedMessage(MessageSourceResolvable resolvable, Locale locale) {
+        String defaultMessage = resolvable.getDefaultMessage();
+        if (defaultMessage != null && defaultMessage.startsWith("{") && defaultMessage.endsWith("}")) {
+            String key = defaultMessage.substring(1, defaultMessage.length() - 1);
+            try {
+                return messageService.getMessage(key, null, locale);
+            } catch (NoSuchMessageException lookupError) {
+                // Missing message key must not fail the exception handler itself.
+                log.debug("Failed to resolve default validation key '{}' for locale '{}', continuing with fallbacks", key, locale, lookupError);
+                defaultMessage = null;
+            }
+        }
+        if (defaultMessage != null && !defaultMessage.isBlank()) {
+            return defaultMessage;
+        }
+        String[] codes = resolvable.getCodes();
+        if (codes != null) {
+            for (String code : codes) {
+                try {
+                    return messageService.getMessage(code, null, locale);
+                } catch (NoSuchMessageException lookupError) {
+                    log.debug("Failed to resolve validation code '{}' for locale '{}', trying next code", code, locale, lookupError);
+                }
+            }
+        }
+        return messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY, null, locale);
+    }
+
+    private String resolveParameterName(ParameterValidationResult result, MessageSourceResolvable resolvable) {
+        String[] codes = resolvable.getCodes();
+        if (codes != null) {
+            for (String code : codes) {
+                int idx = code.lastIndexOf('.');
+                if (idx >= 0 && idx + 1 < code.length()) {
+                    String candidate = code.substring(idx + 1);
+                    if (!candidate.isBlank()) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        String parameterName = result.getMethodParameter().getParameterName();
+        return parameterName != null ? parameterName : "parameter";
+    }
+
+    private Locale resolveLocale(ServerWebExchange exchange) {
+        Locale locale = exchange.getLocaleContext().getLocale();
+        return locale != null ? locale : Locale.ENGLISH;
     }
 
     @ExceptionHandler(UnsupportedMediaTypeStatusException.class)

@@ -166,7 +166,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
-        assertThat(response.message()).isNotBlank();
+        assertThat(response.message()).isEqualTo("Invalid value: not-a-uuid");
     }
 
     @Test
