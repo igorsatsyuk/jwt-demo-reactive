@@ -114,9 +114,14 @@ public class GlobalExceptionHandler {
         }
 
         String invalidUuid = extractInvalidUuidValue(ex);
-        String message = invalidUuid != null
-                ? messageService.getMessage("error.typeMismatch", new Object[]{invalidUuid})
-                : ex.getReason() != null ? ex.getReason() : messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
+        String message;
+        if (invalidUuid != null) {
+            message = messageService.getMessage("error.typeMismatch", new Object[]{invalidUuid});
+        } else if (ex.getReason() != null) {
+            message = ex.getReason();
+        } else {
+            message = messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
+        }
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
     }
 
@@ -173,8 +178,8 @@ public class GlobalExceptionHandler {
             for (String code : codes) {
                 try {
                     return messageService.getMessage(code, null, locale);
-                } catch (Exception ignored) {
-                    // Try the next code and fallback to generic validation message.
+                } catch (RuntimeException lookupError) {
+                    log.debug("Failed to resolve validation code '{}' for locale '{}', trying next code", code, locale, lookupError);
                 }
             }
         }
