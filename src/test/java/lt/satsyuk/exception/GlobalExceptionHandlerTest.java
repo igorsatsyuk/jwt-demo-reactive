@@ -4,7 +4,7 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.service.MessageService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.context.MessageSource;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -12,13 +12,17 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebInputException;
 import org.springframework.web.server.UnsupportedMediaTypeStatusException;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,9 +34,8 @@ import static org.mockito.Mockito.when;
 
 class GlobalExceptionHandlerTest {
 
-    private final MessageSource messageSource = mock(MessageSource.class);
     private final MessageService messageService = mock(MessageService.class);
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(messageSource, messageService);
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(messageService);
 
     @Test
     void handleValidationException_aggregatesFieldErrors() throws Exception {
@@ -159,6 +162,43 @@ class GlobalExceptionHandlerTest {
         ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
         verify(messageService).getMessage(eq("error.typeMismatch"), argsCaptor.capture());
         assertThat(argsCaptor.getValue()).containsExactly("not-a-uuid");
+    }
+
+    @Test
+    void handleServerWebInput_withBindException_returnsFieldValidationMessage() {
+        WebExchangeBindException ex = mock(WebExchangeBindException.class);
+        when(ex.getFieldErrors()).thenReturn(List.of(new FieldError("request", "clientId", "ClientId must be greater than 0")));
+
+        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("clientId: ClientId must be greater than 0");
+    }
+
+    @Test
+    void handleHandlerMethodValidation_usesMessageServiceAndFormatsFieldError() throws Exception {
+        HandlerMethodValidationException ex = mock(HandlerMethodValidationException.class);
+        ParameterValidationResult result = mock(ParameterValidationResult.class);
+        MessageSourceResolvable resolvable = mock(MessageSourceResolvable.class);
+
+        Method method = ValidationDummy.class.getDeclaredMethod("submit", String.class);
+        when(result.getMethodParameter()).thenReturn(new MethodParameter(method, 0));
+        when(result.getResolvableErrors()).thenReturn(List.of(resolvable));
+        when(resolvable.getCodes()).thenReturn(new String[]{"Positive.updateBalanceRequest.clientId"});
+        when(resolvable.getDefaultMessage()).thenReturn("{validation.clientId.positive}");
+        when(ex.getParameterValidationResults()).thenReturn(List.of(result));
+        when(messageService.getMessage("validation.clientId.positive", null, Locale.ENGLISH))
+                .thenReturn("ClientId must be greater than 0");
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/accounts/balance/pessimistic").build());
+
+        AppResponse<Void> response = handler.handleHandlerMethodValidation(ex, exchange).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("clientId: ClientId must be greater than 0");
+        verify(messageService).getMessage("validation.clientId.positive", null, Locale.ENGLISH);
     }
 
     @Test

@@ -154,8 +154,9 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
-        assertThat(response.message()).isNotBlank();
-        assertThat(response.message()).containsIgnoringCase("validation");
+        assertThat(response.message()).contains("clientId:");
+        assertThat(response.message()).contains("ClientId");
+        assertThat(response.message()).contains("0");
     }
 
     @Test
