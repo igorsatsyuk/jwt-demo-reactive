@@ -5,6 +5,7 @@ import lt.satsyuk.service.MessageService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.context.NoSuchMessageException;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -121,6 +122,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleServerWebInput_andUnsupportedMediaType_useReasonOrFallback() {
+        when(messageService.getMessage("error.validation.failed", null, Locale.ENGLISH)).thenReturn("Validation fallback");
         when(messageService.getMessage("error.validation.failed")).thenReturn("Validation fallback");
 
         ServerWebInputException inputWithReason = mock(ServerWebInputException.class);
@@ -128,8 +130,9 @@ class GlobalExceptionHandlerTest {
         when(inputWithReason.getReason()).thenReturn("invalid json");
         when(inputWithoutReason.getReason()).thenReturn(null);
 
-        AppResponse<Void> withReason = handler.handleServerWebInput(inputWithReason).block();
-        AppResponse<Void> fallbackInput = handler.handleServerWebInput(inputWithoutReason).block();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+        AppResponse<Void> withReason = handler.handleServerWebInput(inputWithReason, exchange).block();
+        AppResponse<Void> fallbackInput = handler.handleServerWebInput(inputWithoutReason, exchange).block();
 
         UnsupportedMediaTypeStatusException mediaWithReason = mock(UnsupportedMediaTypeStatusException.class);
         UnsupportedMediaTypeStatusException mediaWithoutReason = mock(UnsupportedMediaTypeStatusException.class);
@@ -147,20 +150,21 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleServerWebInput_invalidUuid_usesTypeMismatchMessage() {
-        when(messageService.getMessage(eq("error.typeMismatch"), any())).thenReturn("Invalid value: not-a-uuid");
+        when(messageService.getMessage(eq("error.typeMismatch"), any(), eq(Locale.ENGLISH))).thenReturn("Invalid value: not-a-uuid");
 
         ServerWebInputException ex = mock(ServerWebInputException.class);
         when(ex.getCause()).thenReturn(new IllegalArgumentException("Invalid UUID string: not-a-uuid"));
         when(ex.getReason()).thenReturn("reason should be ignored for invalid uuid");
 
-        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+        AppResponse<Void> response = handler.handleServerWebInput(ex, exchange).block();
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
         assertThat(response.message()).isEqualTo("Invalid value: not-a-uuid");
 
         ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
-        verify(messageService).getMessage(eq("error.typeMismatch"), argsCaptor.capture());
+        verify(messageService).getMessage(eq("error.typeMismatch"), argsCaptor.capture(), eq(Locale.ENGLISH));
         assertThat(argsCaptor.getValue()).containsExactly("not-a-uuid");
     }
 
@@ -169,7 +173,8 @@ class GlobalExceptionHandlerTest {
         WebExchangeBindException ex = mock(WebExchangeBindException.class);
         when(ex.getFieldErrors()).thenReturn(List.of(new FieldError("request", "clientId", "ClientId must be greater than 0")));
 
-        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+        AppResponse<Void> response = handler.handleServerWebInput(ex, exchange).block();
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
@@ -237,7 +242,7 @@ class GlobalExceptionHandlerTest {
         when(ex.getParameterValidationResults()).thenReturn(List.of(result));
 
         when(messageService.getMessage("validation.clientId.primary", null, Locale.ENGLISH))
-                .thenThrow(new RuntimeException("missing"));
+                .thenThrow(new NoSuchMessageException("validation.clientId.primary"));
         when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
                 .thenReturn("ClientId must be greater than 0");
 
@@ -302,7 +307,8 @@ class GlobalExceptionHandlerTest {
         when(ex.getCause()).thenReturn(nestedCause);
         when(ex.getReason()).thenReturn("reason should not be used");
 
-        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+        AppResponse<Void> response = handler.handleServerWebInput(ex, exchange).block();
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
@@ -320,7 +326,8 @@ class GlobalExceptionHandlerTest {
         when(ex.getCause()).thenReturn(nestedCause);
         when(ex.getReason()).thenReturn("invalid payload");
 
-        AppResponse<Void> response = handler.handleServerWebInput(ex).block();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
+        AppResponse<Void> response = handler.handleServerWebInput(ex, exchange).block();
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
@@ -365,9 +372,9 @@ class GlobalExceptionHandlerTest {
         when(ex.getParameterValidationResults()).thenReturn(List.of(result));
 
         when(messageService.getMessage("validation.clientId.primary", null, Locale.ENGLISH))
-                .thenThrow(new RuntimeException("missing primary"));
+                .thenThrow(new NoSuchMessageException("validation.clientId.primary"));
         when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
-                .thenThrow(new RuntimeException("missing secondary"));
+                .thenThrow(new NoSuchMessageException("validation.clientId.secondary"));
         when(messageService.getMessage("error.validation.failed", null, Locale.ENGLISH)).thenReturn("Validation failed");
 
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/test").build());
@@ -417,7 +424,7 @@ class GlobalExceptionHandlerTest {
         when(ex.getParameterValidationResults()).thenReturn(List.of(result));
 
         when(messageService.getMessage("validation.missing.key", null, Locale.ENGLISH))
-                .thenThrow(new RuntimeException("missing key"));
+                .thenThrow(new NoSuchMessageException("validation.missing.key"));
         when(messageService.getMessage("validation.clientId.secondary", null, Locale.ENGLISH))
                 .thenReturn("ClientId must be greater than 0");
 

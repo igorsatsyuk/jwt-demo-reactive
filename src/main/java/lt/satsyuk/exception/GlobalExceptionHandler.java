@@ -5,6 +5,7 @@ import lt.satsyuk.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.context.NoSuchMessageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.method.ParameterValidationResult;
@@ -107,7 +108,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ServerWebInputException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Mono<AppResponse<Void>> handleServerWebInput(ServerWebInputException ex) {
+    public Mono<AppResponse<Void>> handleServerWebInput(ServerWebInputException ex, ServerWebExchange exchange) {
+        Locale locale = resolveLocale(exchange);
         String bindValidationMessage = extractBindValidationMessage(ex);
         if (bindValidationMessage != null) {
             return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), bindValidationMessage));
@@ -116,11 +118,11 @@ public class GlobalExceptionHandler {
         String invalidUuid = extractInvalidUuidValue(ex);
         String message;
         if (invalidUuid != null) {
-            message = messageService.getMessage("error.typeMismatch", new Object[]{invalidUuid});
+            message = messageService.getMessage("error.typeMismatch", new Object[]{invalidUuid}, locale);
         } else if (ex.getReason() != null) {
             message = ex.getReason();
         } else {
-            message = messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY);
+            message = messageService.getMessage(VALIDATION_FAILED_MESSAGE_KEY, null, locale);
         }
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
     }
@@ -170,7 +172,7 @@ public class GlobalExceptionHandler {
             String key = defaultMessage.substring(1, defaultMessage.length() - 1);
             try {
                 return messageService.getMessage(key, null, locale);
-            } catch (RuntimeException lookupError) {
+            } catch (NoSuchMessageException lookupError) {
                 // Missing message key must not fail the exception handler itself.
                 log.debug("Failed to resolve default validation key '{}' for locale '{}', continuing with fallbacks", key, locale, lookupError);
                 defaultMessage = null;
@@ -184,7 +186,7 @@ public class GlobalExceptionHandler {
             for (String code : codes) {
                 try {
                     return messageService.getMessage(code, null, locale);
-                } catch (RuntimeException lookupError) {
+                } catch (NoSuchMessageException lookupError) {
                     log.debug("Failed to resolve validation code '{}' for locale '{}', trying next code", code, locale, lookupError);
                 }
             }
