@@ -2,9 +2,13 @@ package lt.satsyuk.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
-import org.springframework.beans.factory.annotation.Value;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
+import org.springframework.boot.flyway.autoconfigure.FlywayProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,11 +20,14 @@ import org.springframework.context.annotation.Configuration;
  * mechanism. This configuration bypasses auto-configuration by creating and running Flyway
  * programmatically — the same pattern used by integration tests ({@code ensureSchemaMigrated}).
  * <p>
- * The bean is only activated when {@code spring.flyway.url} is explicitly configured and
+ * All standard {@code spring.flyway.*} properties are honoured via {@link FlywayProperties}.
+ * Additional tuning is available through {@link FlywayConfigurationCustomizer} beans.
+ * The bean activates only when {@code spring.flyway.url} is explicitly set and
  * {@code spring.flyway.enabled} is {@code true} (default). It backs off if another
- * {@code Flyway} bean (e.g., from auto-configuration in test context) is already present.
+ * {@code Flyway} bean is already present (e.g. from auto-configuration in test contexts).
  */
 @Configuration
+@EnableConfigurationProperties(FlywayProperties.class)
 @Slf4j
 public class FlywayMigrationConfig {
 
@@ -28,21 +35,28 @@ public class FlywayMigrationConfig {
     @ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnProperty(name = "spring.flyway.url")
     @ConditionalOnMissingBean(Flyway.class)
-    public Flyway flyway(
-            @Value("${spring.flyway.url}") String url,
-            @Value("${spring.flyway.user}") String user,
-            @Value("${spring.flyway.password}") String password,
-            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations,
-            @Value("${spring.flyway.connect-retries:0}") int connectRetries
-    ) {
-        log.info("Running Flyway migrations: url={}", url);
-        Flyway flyway = Flyway.configure()
-                .dataSource(url, user, password)
-                .locations(locations)
-                .connectRetries(connectRetries)
-                .load();
+    public Flyway flyway(FlywayProperties props,
+                         ObjectProvider<FlywayConfigurationCustomizer> customizers) {
+        log.info("Running Flyway migrations");
+
+        FluentConfiguration config = Flyway.configure()
+                .dataSource(props.getUrl(), props.getUser(), props.getPassword())
+                .locations(props.getLocations().toArray(String[]::new))
+                .connectRetries(props.getConnectRetries())
+                .validateOnMigrate(props.isValidateOnMigrate())
+                .outOfOrder(props.isOutOfOrder())
+                .baselineOnMigrate(props.isBaselineOnMigrate());
+
+        if (!props.getSchemas().isEmpty()) {
+            config.schemas(props.getSchemas().toArray(String[]::new));
+        }
+        config.table(props.getTable());
+
+        customizers.orderedStream().forEach(c -> c.customize(config));
+
+        Flyway flyway = config.load();
         flyway.migrate();
-        log.info("Flyway migrations completed successfully");
+        log.info("Flyway migrations completed");
         return flyway;
     }
 }
