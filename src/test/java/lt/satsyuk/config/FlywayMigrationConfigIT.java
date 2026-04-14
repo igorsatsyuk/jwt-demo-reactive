@@ -23,21 +23,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  * all migrations when running in a pure R2DBC context where no JDBC {@link DataSource}
  * bean is present — the bootstrapping scenario the config was introduced to fix.
  *
- * <p>JDBC {@code DataSourceAutoConfiguration} is excluded so that
- * {@code FlywayMigrationConfig}'s {@code @ConditionalOnMissingBean(DataSource.class)}
- * condition is satisfied and the bean is actually created by our configuration rather
- * than by Spring Boot's Flyway auto-configuration.
+ * <p>Both {@code DataSourceAutoConfiguration} and {@code FlywayAutoConfiguration} are
+ * excluded so that:
+ * <ul>
+ *   <li>no JDBC {@link DataSource} bean is created (simulating the R2DBC-only scenario)</li>
+ *   <li>the {@link Flyway} bean can only originate from {@link FlywayMigrationConfig},
+ *       making the assertion meaningful</li>
+ * </ul>
  */
 @Testcontainers
 @ActiveProfiles("test")
 @SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK,
         properties = {
-                // Simulate pure R2DBC environment: exclude all JDBC DataSource auto-configs
+                // Simulate pure R2DBC environment: exclude JDBC DataSource auto-configs so no
+                // DataSource bean is created. Also exclude FlywayAutoConfiguration so the Flyway
+                // bean can only be provided by FlywayMigrationConfig — making the assertion
+                // that the bean comes from our config unambiguous.
                 "spring.autoconfigure.exclude=" +
                 "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
                 "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration," +
-                "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration"
+                "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration," +
+                "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
         })
 class FlywayMigrationConfigIT {
 
@@ -75,6 +82,7 @@ class FlywayMigrationConfigIT {
 
     @Test
     void flywayBeanIsCreatedByFlywayMigrationConfig() {
+        // FlywayAutoConfiguration is excluded — the Flyway bean can only come from FlywayMigrationConfig
         assertThat(flyway)
                 .as("FlywayMigrationConfig should have created a Flyway bean")
                 .isNotNull();
@@ -82,13 +90,21 @@ class FlywayMigrationConfigIT {
 
     @Test
     void allMigrationsAreAppliedSuccessfully() {
+        long versionedMigrationCount = Arrays.stream(flyway.info().all())
+                .filter(info -> info.getVersion() != null)
+                .count();
+
         long successCount = Arrays.stream(flyway.info().all())
+                .filter(info -> info.getVersion() != null)
                 .filter(info -> info.getState() == MigrationState.SUCCESS)
                 .count();
 
+        assertThat(versionedMigrationCount)
+                .as("there should be at least one versioned migration to validate")
+                .isGreaterThan(0);
+
         assertThat(successCount)
                 .as("all versioned migrations should have been applied with SUCCESS state")
-                .isGreaterThan(0);
+                .isEqualTo(versionedMigrationCount);
     }
 }
-
