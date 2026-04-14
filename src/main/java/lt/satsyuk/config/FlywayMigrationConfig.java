@@ -16,22 +16,23 @@ import org.springframework.context.annotation.Configuration;
  * mechanism. This configuration bypasses auto-configuration by creating and running Flyway
  * programmatically — the same pattern used by integration tests ({@code ensureSchemaMigrated}).
  * <p>
- * The bean is only activated when {@code spring.flyway.url} is explicitly configured, and backs
- * off if another {@code Flyway} bean (e.g., from auto-configuration in test context) is already
- * present.
+ * The bean is only activated when {@code spring.flyway.url} is explicitly configured and
+ * {@code spring.flyway.enabled} is {@code true} (default). It backs off if another
+ * {@code Flyway} bean (e.g., from auto-configuration in test context) is already present.
  */
 @Configuration
 @Slf4j
 public class FlywayMigrationConfig {
 
     @Bean
+    @ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnProperty(name = "spring.flyway.url")
     @ConditionalOnMissingBean(Flyway.class)
     public Flyway flyway(
             @Value("${spring.flyway.url}") String url,
             @Value("${spring.flyway.user}") String user,
             @Value("${spring.flyway.password}") String password,
-            @Value("${spring.flyway.locations:classpath:db/migration}") String locations,
+            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations,
             @Value("${spring.flyway.connect-retries:0}") int connectRetries
     ) {
         log.info("Running Flyway migrations: url={}", url);
@@ -45,4 +46,3 @@ public class FlywayMigrationConfig {
         return flyway;
     }
 }
-
