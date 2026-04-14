@@ -77,6 +77,13 @@
 			<artifactId>flyway-database-postgresql</artifactId>
 			<version>${flyway.version}</version>
 		</dependency>
+		<!-- Spring Boot Flyway integration: provides FlywayProperties,
+		     FlywayConfigurationCustomizer and FlywayAutoConfiguration
+		     (moved out of spring-boot-autoconfigure in Spring Boot 4) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>com.bucket4j</groupId>
