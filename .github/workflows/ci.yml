@@ -120,7 +120,9 @@ jobs:
             - Skipped: ${{ steps.integration.outputs.skipped }}
 
       - name: SonarCloud analysis
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request'
+        if: >
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
