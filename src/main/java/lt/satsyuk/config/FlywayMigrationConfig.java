@@ -6,11 +6,13 @@ import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.boot.flyway.autoconfigure.FlywayProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import javax.sql.DataSource;
 
 /**
  * Explicit Flyway migration configuration for reactive applications.
@@ -20,11 +22,16 @@ import org.springframework.context.annotation.Configuration;
  * mechanism. This configuration bypasses auto-configuration by creating and running Flyway
  * programmatically — the same pattern used by integration tests ({@code ensureSchemaMigrated}).
  * <p>
- * All standard {@code spring.flyway.*} properties are honoured via {@link FlywayProperties}.
- * Additional tuning is available through {@link FlywayConfigurationCustomizer} beans.
- * The bean activates only when {@code spring.flyway.url} is explicitly set and
- * {@code spring.flyway.enabled} is {@code true} (default). It backs off if another
- * {@code Flyway} bean is already present (e.g. from auto-configuration in test contexts).
+ * This configuration applies the subset of {@code spring.flyway.*} settings that are mapped
+ * explicitly in the {@link org.flywaydb.core.api.configuration.FluentConfiguration} setup below
+ * (datasource, locations, connect-retries, validate-on-migrate, out-of-order, baseline-on-migrate,
+ * schemas, and table). Other Flyway settings exposed through {@link FlywayProperties} require one
+ * or more {@link FlywayConfigurationCustomizer} beans to be applied.
+ * <p>
+ * The bean activates only when {@code spring.flyway.url} is explicitly set,
+ * {@code spring.flyway.enabled} is {@code true} (default), no other {@code Flyway} bean is present
+ * (e.g. from auto-configuration in test contexts), and no JDBC {@link DataSource} bean is present
+ * (if a {@code DataSource} exists, Spring Boot's own Flyway auto-configuration takes over).
  */
 @Configuration
 @EnableConfigurationProperties(FlywayProperties.class)
@@ -34,7 +41,7 @@ public class FlywayMigrationConfig {
     @Bean
     @ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnProperty(name = "spring.flyway.url")
-    @ConditionalOnMissingBean(Flyway.class)
+    @ConditionalOnMissingBean({Flyway.class, DataSource.class})
     public Flyway flyway(FlywayProperties props,
                          ObjectProvider<FlywayConfigurationCustomizer> customizers) {
         log.info("Running Flyway migrations");
