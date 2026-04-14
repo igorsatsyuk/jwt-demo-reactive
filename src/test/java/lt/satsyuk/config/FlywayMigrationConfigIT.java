@@ -96,11 +96,13 @@ class FlywayMigrationConfigIT {
 
     @Test
     void allMigrationsAreAppliedSuccessfully() {
-        long versionedMigrationCount = Arrays.stream(flyway.info().all())
+        var migrations = flyway.info().all();
+
+        long versionedMigrationCount = Arrays.stream(migrations)
                 .filter(info -> info.getVersion() != null)
                 .count();
 
-        long successCount = Arrays.stream(flyway.info().all())
+        long successCount = Arrays.stream(migrations)
                 .filter(info -> info.getVersion() != null)
                 .filter(info -> info.getState() == MigrationState.SUCCESS)
                 .count();
