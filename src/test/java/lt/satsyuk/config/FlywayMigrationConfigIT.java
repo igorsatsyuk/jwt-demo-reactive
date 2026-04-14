@@ -10,8 +10,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import javax.sql.DataSource;
 import java.util.Arrays;
@@ -31,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       making the assertion meaningful</li>
  * </ul>
  */
-@Testcontainers
 @ActiveProfiles("test")
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -48,7 +45,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         })
 class FlywayMigrationConfigIT {
 
-    @Container
+    // Container is not annotated with @Container / @Testcontainers — it is started explicitly
+    // inside @DynamicPropertySource (same pattern as AbstractIntegrationTest) to guarantee
+    // the container is running before Spring resolves property values from the suppliers.
     static final PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:17-alpine")
                     .withDatabaseName("flyway_test")
@@ -57,6 +56,7 @@ class FlywayMigrationConfigIT {
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry registry) {
+        ensureContainerStarted();
         registry.add("spring.r2dbc.url", () ->
                 "r2dbc:postgresql://" + postgres.getHost() + ":" + postgres.getFirstMappedPort() + "/flyway_test");
         registry.add("spring.r2dbc.username", postgres::getUsername);
@@ -65,6 +65,12 @@ class FlywayMigrationConfigIT {
         registry.add("spring.flyway.url", postgres::getJdbcUrl);
         registry.add("spring.flyway.user", postgres::getUsername);
         registry.add("spring.flyway.password", postgres::getPassword);
+    }
+
+    private static synchronized void ensureContainerStarted() {
+        if (!postgres.isRunning()) {
+            postgres.start();
+        }
     }
 
     @Autowired
