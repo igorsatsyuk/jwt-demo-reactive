@@ -18,6 +18,10 @@ import static org.mockito.Mockito.when;
 
 class TraceIdResponseHeaderWebFilterTest {
 
+    private static final String VALID_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
+    private static final String LATE_TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
+    private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
+
     @AfterEach
     void clearMdc() {
         MDC.clear();
@@ -30,7 +34,7 @@ class TraceIdResponseHeaderWebFilterTest {
         TraceContext context = mock(TraceContext.class);
         when(tracer.currentSpan()).thenReturn(span);
         when(span.context()).thenReturn(context);
-        when(context.traceId()).thenReturn("trace-123");
+        when(context.traceId()).thenReturn(VALID_TRACE_ID);
 
         TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
@@ -39,14 +43,16 @@ class TraceIdResponseHeaderWebFilterTest {
         filter.filter(exchange, chain).block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
-                .isEqualTo("trace-123");
+                .isEqualTo(VALID_TRACE_ID);
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
     }
 
     @Test
     void filter_fallsBackToMdcWhenSpanMissing() {
         Tracer tracer = mock(Tracer.class);
         when(tracer.currentSpan()).thenReturn(null);
-        MDC.put("traceId", "mdc-456");
+        MDC.put("traceId", VALID_TRACE_ID);
 
         TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
@@ -54,7 +60,9 @@ class TraceIdResponseHeaderWebFilterTest {
         filter.filter(exchange, e -> e.getResponse().setComplete()).block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
-                .isEqualTo("mdc-456");
+                .isEqualTo(VALID_TRACE_ID);
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
     }
 
     @Test
@@ -64,7 +72,7 @@ class TraceIdResponseHeaderWebFilterTest {
         TraceContext context = mock(TraceContext.class);
         when(tracer.currentSpan()).thenReturn(null, span);
         when(span.context()).thenReturn(context);
-        when(context.traceId()).thenReturn("late-trace");
+        when(context.traceId()).thenReturn(LATE_TRACE_ID);
 
         TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
@@ -72,7 +80,9 @@ class TraceIdResponseHeaderWebFilterTest {
         filter.filter(exchange, e -> e.getResponse().setComplete()).block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
-                .isEqualTo("late-trace");
+                .isEqualTo(LATE_TRACE_ID);
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
     }
 
     @Test
@@ -90,7 +100,56 @@ class TraceIdResponseHeaderWebFilterTest {
 
         assertThat(exchange.getResponse().getHeaders().get(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
                 .containsExactly("existing");
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
         verify(tracer, times(1)).currentSpan();
+    }
+
+    @Test
+    void filter_exposesTraceHeaderForCors() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        assertThat(exchange.getResponse().getHeaders().getAccessControlExposeHeaders())
+                .contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER, TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+    }
+
+    @Test
+    void filter_generatesFallbackTraceIdWhenTraceSourcesAreMissing() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
+                .matches(TRACE_ID_REGEX);
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
+    }
+
+    @Test
+    void filter_ignoresInvalidTraceIdFromMdcAndGeneratesFallback() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+        MDC.put("traceId", "trace-123");
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
+                .matches(TRACE_ID_REGEX);
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
     }
 }
 

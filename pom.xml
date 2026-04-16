@@ -107,6 +107,22 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-opentelemetry</artifactId>
 		</dependency>
+		<!--
+		  Logback → OpenTelemetry bridge.
+		  Spring Boot 4 configures the OTel SDK log pipeline (OtlpLoggingAutoConfiguration)
+		  but does NOT auto-install a Logback appender.  This artifact provides
+		  OpenTelemetryAppender which we wire in logback-spring.xml so Logback events
+		  reach the SdkLoggerProvider and are exported via OTLP.
+		  Version 2.21.0-alpha is aligned with opentelemetry-api:1.55.0 (managed by
+		  opentelemetry-bom imported in spring-boot-dependencies:4.0.3).
+		-->
+		<dependency>
+			<groupId>io.opentelemetry.instrumentation</groupId>
+			<artifactId>opentelemetry-logback-appender-1.0</artifactId>
+			<version>2.21.0-alpha</version>
+			<!-- compile scope: OpenTelemetryAppender.install() must be called from
+			     OpenTelemetryLogConfig at startup to connect Logback → OTel SDK -->
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>

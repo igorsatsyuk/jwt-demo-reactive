@@ -5,6 +5,8 @@ import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -13,29 +15,48 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.UUID;
+
 @Component
 @ConditionalOnProperty(name = "app.trace-id-header.enabled", havingValue = "true", matchIfMissing = true)
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
 public class TraceIdResponseHeaderWebFilter implements WebFilter {
 
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
+    public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String MDC_TRACE_ID_KEY = "traceId";
+    private static final String TRACE_ID_PATTERN = "(?i)^[0-9a-f]{32}$";
+    private static final HexFormat HEX = HexFormat.of();
 
     private final Tracer tracer;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        exposeTraceHeaderForCors(exchange);
+        setRequestIdHeaderIfMissing(exchange);
+
         String traceId = resolveTraceId();
         if (StringUtils.hasText(traceId)) {
-            exchange.getResponse().getHeaders().add(TRACE_ID_HEADER, traceId);
+            exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, traceId);
         }
 
         exchange.getResponse().beforeCommit(() -> {
+            exposeTraceHeaderForCors(exchange);
+            setRequestIdHeaderIfMissing(exchange);
+
             if (!StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
                 String lateTraceId = resolveTraceId();
-                if (StringUtils.hasText(lateTraceId)) {
-                    exchange.getResponse().getHeaders().add(TRACE_ID_HEADER, lateTraceId);
-                }
+                exchange.getResponse().getHeaders().set(
+                        TRACE_ID_HEADER,
+                        StringUtils.hasText(lateTraceId)
+                                ? lateTraceId
+                                : buildFallbackTraceId(exchange.getRequest().getId())
+                );
             }
             return Mono.empty();
         });
@@ -47,13 +68,57 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         Span span = tracer.currentSpan();
         if (span != null) {
             TraceContext context = span.context();
-            if (StringUtils.hasText(context.traceId())) {
+            if (isValidTraceId(context.traceId())) {
                 return context.traceId();
             }
         }
 
         String traceIdFromMdc = MDC.get(MDC_TRACE_ID_KEY);
-        return StringUtils.hasText(traceIdFromMdc) ? traceIdFromMdc : null;
+        if (isValidTraceId(traceIdFromMdc)) {
+            return traceIdFromMdc;
+        }
+
+        return null;
+    }
+
+    private boolean isValidTraceId(String candidate) {
+        return StringUtils.hasText(candidate) && candidate.matches(TRACE_ID_PATTERN);
+    }
+
+    private String buildFallbackTraceId(String requestId) {
+        if (!StringUtils.hasText(requestId)) {
+            return UUID.randomUUID().toString().replace("-", "");
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(requestId.getBytes(StandardCharsets.UTF_8));
+            return HEX.formatHex(hash, 0, 16);
+        } catch (NoSuchAlgorithmException _) {
+            return UUID.randomUUID().toString().replace("-", "");
+        }
+    }
+
+    private void setRequestIdHeaderIfMissing(ServerWebExchange exchange) {
+        if (StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(REQUEST_ID_HEADER))) {
+            return;
+        }
+
+        String requestId = exchange.getRequest().getId();
+        if (StringUtils.hasText(requestId)) {
+            exchange.getResponse().getHeaders().set(REQUEST_ID_HEADER, requestId);
+        }
+    }
+
+    private void exposeTraceHeaderForCors(ServerWebExchange exchange) {
+        var exposeHeaders = new java.util.ArrayList<>(exchange.getResponse().getHeaders().getAccessControlExposeHeaders());
+        if (!exposeHeaders.contains(TRACE_ID_HEADER)) {
+            exposeHeaders.add(TRACE_ID_HEADER);
+        }
+        if (!exposeHeaders.contains(REQUEST_ID_HEADER)) {
+            exposeHeaders.add(REQUEST_ID_HEADER);
+        }
+        exchange.getResponse().getHeaders().setAccessControlExposeHeaders(exposeHeaders);
     }
 }
 

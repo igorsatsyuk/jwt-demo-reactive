@@ -2,20 +2,45 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: 0.0.0.0:4317
       http:
+        endpoint: 0.0.0.0:4318
 
 processors:
   batch:
+
+  # Embed traceId into the log body for Loki derived field regex.
+  # Source: Logback MDC attribute "traceId" captured by OpenTelemetryAppender
+  # (captureMdcAttributes=* in logback-spring.xml). MDC is populated by
+  # spring.reactor.context-propagation=auto for every active traced request.
+  # Note: Hex(pcommon.TraceID) is unsupported in this collector version;
+  # the MDC string attribute is used instead.
+  transform/logs:
+    log_statements:
+      - context: log
+        statements:
+          - 'set(log.body, Concat([log.body, " trace_id=", attributes["traceId"]], "")) where IsString(log.body) and attributes["traceId"] != nil and attributes["traceId"] != ""'
 
 exporters:
   otlp/tempo:
     endpoint: tempo:4317
     tls:
       insecure: true
+
   loki:
     endpoint: http://loki:3100/loki/api/v1/push
+    # job label comes from service.name resource attribute (→ "jwt-demo-reactive").
+    # level label comes from the log severity.
+    # exporter / instance labels are disabled to reduce cardinality.
+    default_labels_enabled:
+      exporter: false
+      job: true
+      instance: false
+      level: true
+
   prometheus:
     endpoint: 0.0.0.0:9464
+
   debug:
     verbosity: basic
 
@@ -30,7 +55,7 @@ service:
       exporters: [otlp/tempo, debug]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [transform/logs, batch]
       exporters: [loki, debug]
     metrics:
       receivers: [otlp]

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Spring Boot default Logback defaults (log levels, conversion rules) -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- Console appender – keeps existing stdout behaviour intact -->
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!--
+      OpenTelemetry Logback appender.
+      Captures every Logback ILoggingEvent and emits an OTel LogRecord into the
+      SdkLoggerProvider configured by Spring Boot's OtlpLoggingAutoConfiguration.
+      The OTLP exporter (management.opentelemetry.logging.export.otlp.endpoint)
+      then batches and forwards records to the OTel Collector.
+
+      captureMdcAttributes="*" ensures that traceId / spanId written into the
+      Logback MDC by spring.reactor.context-propagation=auto are captured as
+      OTel log attributes, which later become part of the exported log record so
+      the otel-collector transform processor can embed them in the log body for
+      Loki correlation.
+    -->
+    <appender name="OpenTelemetry"
+              class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        <captureExperimentalAttributes>false</captureExperimentalAttributes>
+        <captureKeyValuePairAttributes>true</captureKeyValuePairAttributes>
+        <!-- capture all MDC keys, including traceId and spanId -->
+        <captureMdcAttributes>*</captureMdcAttributes>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="OpenTelemetry"/>
+    </root>
+
+</configuration>
+

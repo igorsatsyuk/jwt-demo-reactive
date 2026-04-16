@@ -51,6 +51,8 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 })
 class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
+    private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
+
     @Autowired
     private RateLimitingWebFilter rateLimitingWebFilter;
 
@@ -101,6 +103,62 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         );
     }
 
+    @Test
+    void unauthorized_short_circuit_response_contains_trace_id_header() {
+        EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult();
+
+        assertThat(result.getResponseBody()).isNotNull();
+        assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.UNAUTHORIZED.getCode());
+        assertTraceAndRequestHeaders(result);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Trace-Id");
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Request-Id");
+    }
+
+    @Test
+    void success_response_contains_trace_id_header() {
+        stubTokenEndpointSuccess();
+
+        EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result = login()
+                .expectStatus().isOk()
+                .expectBody(new ParameterizedTypeReference<AppResponse<KeycloakTokenResponse>>() {})
+                .returnResult();
+
+        assertTraceAndRequestHeaders(result);
+    }
+
+    @Test
+    void forbidden_short_circuit_response_contains_trace_id_header() {
+        stubIntrospectionWithoutRoles("no-role-token");
+
+        EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .header(AUTHORIZATION, "Bearer no-role-token")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult();
+
+        assertThat(result.getResponseBody()).isNotNull();
+        assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+        assertTraceAndRequestHeaders(result);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Trace-Id");
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Request-Id");
+    }
+
+    private void assertTraceAndRequestHeaders(EntityExchangeResult<?> result) {
+        String requestId = result.getResponseHeaders().getFirst("X-Request-Id");
+        String traceId = result.getResponseHeaders().getFirst("X-Trace-Id");
+
+        assertThat(requestId).isNotBlank();
+        assertThat(traceId).isNotBlank();
+        assertThat(traceId).matches(TRACE_ID_REGEX);
+    }
+
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec login() {
         return webTestClient.post()
                 .uri("/api/auth/login")
@@ -139,6 +197,24 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
                                   "resource_access": {"spring-app": {"roles": ["CLIENT_GET"]}}
                                 }
                                 """.formatted(jkt))));
+    }
+
+    private void stubIntrospectionWithoutRoles(String token) {
+        stubFor(post(urlEqualTo(INTROSPECT_PATH))
+                .withRequestBody(containing("token=" + token))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader(CONTENT_TYPE, APPLICATION_JSON_VALUE)
+                        .withBody("""
+                                {
+                                  "active": true,
+                                  "username": "user",
+                                  "client_id": "spring-app",
+                                  "azp": "spring-app",
+                                  "realm_access": {"roles": []},
+                                  "resource_access": {"spring-app": {"roles": []}}
+                                }
+                                """)));
     }
 }
 

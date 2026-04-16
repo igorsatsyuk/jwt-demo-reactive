@@ -32,6 +32,7 @@ services:
   tempo:
     image: grafana/tempo:2.7.2
     container_name: jwt-reactive-tempo
+    user: "0:0"
     command: ["-config.file=/etc/tempo/tempo.yml"]
     ports:
       - "3200:3200"
@@ -77,6 +78,7 @@ services:
       - ./ops/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
 
+
   grafana:
     image: grafana/grafana:11.5.2
     container_name: jwt-reactive-grafana
@@ -116,6 +118,10 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
       MANAGEMENT_OTLP_LOGGING_ENDPOINT: ${MANAGEMENT_OTLP_LOGGING_ENDPOINT:-http://otel-collector:4318/v1/logs}
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: ${MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED:-true}
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
+      MANAGEMENT_LOGGING_EXPORT_OTLP_ENABLED: ${MANAGEMENT_LOGGING_EXPORT_OTLP_ENABLED:-true}
+      MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/logs}
     ports:
       - "8081:8081"
 
