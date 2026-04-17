@@ -26,6 +26,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String MDC_TRACE_ID_KEY = "traceId";
+    private static final String INVALID_ZERO_TRACE_ID = "00000000000000000000000000000000";
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("^[0-9a-f]{32}$", Pattern.CASE_INSENSITIVE);
 
     private final Tracer tracer;
@@ -74,7 +75,9 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     }
 
     private boolean isValidTraceId(String candidate) {
-        return StringUtils.hasText(candidate) && TRACE_ID_PATTERN.matcher(candidate).matches();
+        return StringUtils.hasText(candidate)
+                && !INVALID_ZERO_TRACE_ID.equals(candidate)
+                && TRACE_ID_PATTERN.matcher(candidate).matches();
     }
 
 

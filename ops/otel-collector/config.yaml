@@ -19,7 +19,7 @@ processors:
     log_statements:
       - context: log
         statements:
-          - 'set(log.body, Concat([log.body, " trace_id=", attributes["traceId"]], "")) where IsString(log.body) and attributes["traceId"] != nil and attributes["traceId"] != ""'
+          - 'set(log.body, Concat([log.body, " trace_id=", attributes["traceId"]], "")) where IsString(log.body) and attributes["traceId"] != nil and IsString(attributes["traceId"]) and attributes["traceId"] != ""'
 
 exporters:
   otlp/tempo:

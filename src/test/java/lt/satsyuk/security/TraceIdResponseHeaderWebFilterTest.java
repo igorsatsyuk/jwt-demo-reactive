@@ -149,5 +149,22 @@ class TraceIdResponseHeaderWebFilterTest {
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
                 .isEqualTo(exchange.getRequest().getId());
     }
+
+    @Test
+    void filter_rejectsAllZeroTraceIdFromMdc() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+        MDC.put("traceId", "00000000000000000000000000000000");
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
+                .isNull();
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
+                .isEqualTo(exchange.getRequest().getId());
+    }
 }
 
