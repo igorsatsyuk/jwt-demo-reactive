@@ -20,8 +20,6 @@ class TraceIdResponseHeaderWebFilterTest {
 
     private static final String VALID_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
     private static final String LATE_TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
-    private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
-
     @AfterEach
     void clearMdc() {
         MDC.clear();
@@ -120,7 +118,7 @@ class TraceIdResponseHeaderWebFilterTest {
     }
 
     @Test
-    void filter_generatesFallbackTraceIdWhenTraceSourcesAreMissing() {
+    void filter_doesNotSetTraceIdWhenTraceSourcesAreMissing() {
         Tracer tracer = mock(Tracer.class);
         when(tracer.currentSpan()).thenReturn(null);
 
@@ -130,13 +128,13 @@ class TraceIdResponseHeaderWebFilterTest {
         filter.filter(exchange, e -> e.getResponse().setComplete()).block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
-                .matches(TRACE_ID_REGEX);
+                .isNull();
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
                 .isEqualTo(exchange.getRequest().getId());
     }
 
     @Test
-    void filter_ignoresInvalidTraceIdFromMdcAndGeneratesFallback() {
+    void filter_ignoresInvalidTraceIdFromMdcWithoutFallbackTrace() {
         Tracer tracer = mock(Tracer.class);
         when(tracer.currentSpan()).thenReturn(null);
         MDC.put("traceId", "trace-123");
@@ -147,7 +145,7 @@ class TraceIdResponseHeaderWebFilterTest {
         filter.filter(exchange, e -> e.getResponse().setComplete()).block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
-                .matches(TRACE_ID_REGEX);
+                .isNull();
         assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER))
                 .isEqualTo(exchange.getRequest().getId());
     }

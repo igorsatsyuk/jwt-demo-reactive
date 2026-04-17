@@ -15,10 +15,6 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Component
@@ -31,14 +27,6 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String MDC_TRACE_ID_KEY = "traceId";
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("^[0-9a-f]{32}$", Pattern.CASE_INSENSITIVE);
-    private static final HexFormat HEX = HexFormat.of();
-    private static final ThreadLocal<MessageDigest> SHA_256 = ThreadLocal.withInitial(() -> {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (Exception ex) {
-            throw new IllegalStateException("SHA-256 is not available", ex);
-        }
-    });
 
     private final Tracer tracer;
 
@@ -58,12 +46,9 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
 
             if (!StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
                 String lateTraceId = resolveTraceId();
-                exchange.getResponse().getHeaders().set(
-                        TRACE_ID_HEADER,
-                        StringUtils.hasText(lateTraceId)
-                                ? lateTraceId
-                                : buildFallbackTraceId(exchange.getRequest().getId())
-                );
+                if (StringUtils.hasText(lateTraceId)) {
+                    exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, lateTraceId);
+                }
             }
             return Mono.empty();
         });
@@ -92,18 +77,6 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         return StringUtils.hasText(candidate) && TRACE_ID_PATTERN.matcher(candidate).matches();
     }
 
-    private String buildFallbackTraceId(String requestId) {
-        if (!StringUtils.hasText(requestId)) {
-            return UUID.randomUUID().toString().replace("-", "");
-        }
-
-        try {
-            byte[] hash = SHA_256.get().digest(requestId.getBytes(StandardCharsets.UTF_8));
-            return HEX.formatHex(hash, 0, 16);
-        } catch (RuntimeException _) {
-            return UUID.randomUUID().toString().replace("-", "");
-        }
-    }
 
     private void setRequestIdHeaderIfMissing(ServerWebExchange exchange) {
         if (StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(REQUEST_ID_HEADER))) {

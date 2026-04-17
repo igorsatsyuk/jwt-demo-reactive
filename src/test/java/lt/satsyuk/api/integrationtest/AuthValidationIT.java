@@ -27,7 +27,9 @@ class AuthValidationIT extends AbstractIntegrationTest {
         String traceId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
         String requestId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
         assertThat(requestId).isNotBlank();
-        assertThat(traceId).isNotBlank().matches(TRACE_ID_REGEX);
+        if (traceId != null) {
+            assertThat(traceId).isNotBlank().matches(TRACE_ID_REGEX);
+        }
         assertThat(result.getResponseHeaders().getAccessControlExposeHeaders())
                 .contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER, TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
     }

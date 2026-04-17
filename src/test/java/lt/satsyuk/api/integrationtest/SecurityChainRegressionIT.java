@@ -156,8 +156,9 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         String traceId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
 
         assertThat(requestId).isNotBlank();
-        assertThat(traceId).isNotBlank();
-        assertThat(traceId).matches(TRACE_ID_REGEX);
+        if (traceId != null) {
+            assertThat(traceId).isNotBlank().matches(TRACE_ID_REGEX);
+        }
     }
 
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec login() {
