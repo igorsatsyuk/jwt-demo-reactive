@@ -7,36 +7,32 @@
     <!-- Console appender – keeps existing stdout behaviour intact -->
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-    <springProperty scope="context"
-                    name="otlpLoggingEnabled"
-                    source="management.logging.export.otlp.enabled"
-                    defaultValue="false"/>
-
     <!--
       OpenTelemetry Logback appender.
       Captures Logback events and emits OTel LogRecords into the
       SdkLoggerProvider configured by Spring Boot's OtlpLoggingAutoConfiguration.
       Only correlation MDC keys are exported to limit payload size.
+      Enable via Spring profile: otlp-logging.
     -->
-    <if condition='property("otlpLoggingEnabled").equals("true")'>
-        <then>
-            <appender name="OpenTelemetry"
-                      class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
-                <captureExperimentalAttributes>false</captureExperimentalAttributes>
-                <captureKeyValuePairAttributes>true</captureKeyValuePairAttributes>
-                <captureMdcAttributes>traceId,spanId</captureMdcAttributes>
-            </appender>
-        </then>
-    </if>
+    <springProfile name="otlp-logging">
+        <appender name="OpenTelemetry"
+                  class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+            <captureExperimentalAttributes>false</captureExperimentalAttributes>
+            <captureKeyValuePairAttributes>true</captureKeyValuePairAttributes>
+            <captureMdcAttributes>traceId,spanId</captureMdcAttributes>
+        </appender>
 
-    <root level="${ROOT_LOG_LEVEL}">
-        <appender-ref ref="CONSOLE"/>
-        <if condition='property("otlpLoggingEnabled").equals("true")'>
-            <then>
-                <appender-ref ref="OpenTelemetry"/>
-            </then>
-        </if>
-    </root>
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="OpenTelemetry"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!otlp-logging">
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
 
 </configuration>
 
