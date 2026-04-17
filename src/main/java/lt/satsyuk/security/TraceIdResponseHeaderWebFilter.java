@@ -107,7 +107,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     }
 
     private boolean containsHeaderIgnoreCase(java.util.List<String> headers, String expectedHeader) {
-        return headers.stream().anyMatch(header -> expectedHeader.equalsIgnoreCase(header));
+        return headers.stream().anyMatch(expectedHeader::equalsIgnoreCase);
     }
 }
 
