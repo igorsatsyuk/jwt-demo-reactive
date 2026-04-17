@@ -11,7 +11,7 @@ processors:
 
   # Embed traceId into the log body for Loki derived field regex.
   # Source: Logback MDC attribute "traceId" captured by OpenTelemetryAppender
-  # (captureMdcAttributes=* in logback-spring.xml). MDC is populated by
+  # (captureMdcAttributes=traceId,spanId in logback-spring.xml). MDC is populated by
   # spring.reactor.context-propagation=auto for every active traced request.
   # Note: Hex(pcommon.TraceID) is unsupported in this collector version;
   # the MDC string attribute is used instead.
