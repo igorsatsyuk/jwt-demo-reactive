@@ -32,7 +32,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        exposeTraceHeaderForCors(exchange);
+        exposeTraceAndRequestHeadersForCors(exchange);
         setRequestIdHeaderIfMissing(exchange);
 
         String traceId = resolveTraceId();
@@ -41,7 +41,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         }
 
         exchange.getResponse().beforeCommit(() -> {
-            exposeTraceHeaderForCors(exchange);
+            exposeTraceAndRequestHeadersForCors(exchange);
             setRequestIdHeaderIfMissing(exchange);
 
             if (!StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
@@ -89,7 +89,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         }
     }
 
-    private void exposeTraceHeaderForCors(ServerWebExchange exchange) {
+    private void exposeTraceAndRequestHeadersForCors(ServerWebExchange exchange) {
         var exposeHeaders = new java.util.ArrayList<>(exchange.getResponse().getHeaders().getAccessControlExposeHeaders());
         if (!exposeHeaders.contains(TRACE_ID_HEADER)) {
             exposeHeaders.add(TRACE_ID_HEADER);

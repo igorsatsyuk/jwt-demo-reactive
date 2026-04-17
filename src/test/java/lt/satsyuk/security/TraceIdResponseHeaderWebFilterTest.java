@@ -104,7 +104,7 @@ class TraceIdResponseHeaderWebFilterTest {
     }
 
     @Test
-    void filter_exposesTraceHeaderForCors() {
+    void filter_exposesTraceAndRequestHeadersForCors() {
         Tracer tracer = mock(Tracer.class);
         when(tracer.currentSpan()).thenReturn(null);
 
