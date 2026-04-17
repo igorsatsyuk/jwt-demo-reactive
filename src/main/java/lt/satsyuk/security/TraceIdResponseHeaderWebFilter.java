@@ -36,21 +36,13 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         exposeTraceAndRequestHeadersForCors(exchange);
         setRequestIdHeaderIfMissing(exchange);
 
-        String traceId = resolveTraceId();
-        if (StringUtils.hasText(traceId)) {
-            exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, traceId);
-        }
+        setTraceIdHeaderIfMissing(exchange);
 
         exchange.getResponse().beforeCommit(() -> {
             exposeTraceAndRequestHeadersForCors(exchange);
             setRequestIdHeaderIfMissing(exchange);
 
-            if (!StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
-                String lateTraceId = resolveTraceId();
-                if (StringUtils.hasText(lateTraceId)) {
-                    exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, lateTraceId);
-                }
-            }
+            setTraceIdHeaderIfMissing(exchange);
             return Mono.empty();
         });
 
@@ -80,6 +72,17 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
                 && TRACE_ID_PATTERN.matcher(candidate).matches();
     }
 
+    private void setTraceIdHeaderIfMissing(ServerWebExchange exchange) {
+        if (StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(TRACE_ID_HEADER))) {
+            return;
+        }
+
+        String traceId = resolveTraceId();
+        if (StringUtils.hasText(traceId)) {
+            exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, traceId);
+        }
+    }
+
 
     private void setRequestIdHeaderIfMissing(ServerWebExchange exchange) {
         if (StringUtils.hasText(exchange.getResponse().getHeaders().getFirst(REQUEST_ID_HEADER))) {
@@ -94,13 +97,17 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
 
     private void exposeTraceAndRequestHeadersForCors(ServerWebExchange exchange) {
         var exposeHeaders = new java.util.ArrayList<>(exchange.getResponse().getHeaders().getAccessControlExposeHeaders());
-        if (!exposeHeaders.contains(TRACE_ID_HEADER)) {
+        if (!containsHeaderIgnoreCase(exposeHeaders, TRACE_ID_HEADER)) {
             exposeHeaders.add(TRACE_ID_HEADER);
         }
-        if (!exposeHeaders.contains(REQUEST_ID_HEADER)) {
+        if (!containsHeaderIgnoreCase(exposeHeaders, REQUEST_ID_HEADER)) {
             exposeHeaders.add(REQUEST_ID_HEADER);
         }
         exchange.getResponse().getHeaders().setAccessControlExposeHeaders(exposeHeaders);
+    }
+
+    private boolean containsHeaderIgnoreCase(java.util.List<String> headers, String expectedHeader) {
+        return headers.stream().anyMatch(header -> expectedHeader.equalsIgnoreCase(header));
     }
 }
 

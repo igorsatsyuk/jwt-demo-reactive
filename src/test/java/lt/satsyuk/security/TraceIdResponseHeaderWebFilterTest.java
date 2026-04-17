@@ -10,6 +10,8 @@ import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -104,6 +106,22 @@ class TraceIdResponseHeaderWebFilterTest {
     }
 
     @Test
+    void filter_preservesPreSetTraceIdHeader() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+        exchange.getResponse().getHeaders().set(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER, "pre-set");
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER))
+                .isEqualTo("pre-set");
+        verify(tracer, times(0)).currentSpan();
+    }
+
+    @Test
     void filter_exposesTraceAndRequestHeadersForCors() {
         Tracer tracer = mock(Tracer.class);
         when(tracer.currentSpan()).thenReturn(null);
@@ -115,6 +133,24 @@ class TraceIdResponseHeaderWebFilterTest {
 
         assertThat(exchange.getResponse().getHeaders().getAccessControlExposeHeaders())
                 .contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER, TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+    }
+
+    @Test
+    void filter_doesNotDuplicateCorsExposeHeadersWithDifferentCase() {
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(null);
+
+        TraceIdResponseHeaderWebFilter filter = new TraceIdResponseHeaderWebFilter(tracer);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
+        exchange.getResponse().getHeaders().setAccessControlExposeHeaders(List.of("x-trace-id", "x-request-id"));
+
+        filter.filter(exchange, e -> e.getResponse().setComplete()).block();
+
+        List<String> exposeHeaders = exchange.getResponse().getHeaders().getAccessControlExposeHeaders();
+        assertThat(exposeHeaders.stream().filter(h -> h.equalsIgnoreCase(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER)).count())
+                .isEqualTo(1);
+        assertThat(exposeHeaders.stream().filter(h -> h.equalsIgnoreCase(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER)).count())
+                .isEqualTo(1);
     }
 
     @Test
