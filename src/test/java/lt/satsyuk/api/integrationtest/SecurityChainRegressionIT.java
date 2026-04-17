@@ -6,6 +6,7 @@ import lt.satsyuk.dto.KeycloakTokenResponse;
 import lt.satsyuk.dto.LoginRequest;
 import lt.satsyuk.security.DpopProofValidator;
 import lt.satsyuk.security.RateLimitingWebFilter;
+import lt.satsyuk.security.TraceIdResponseHeaderWebFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,8 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
         "app.rate-limit.rules[1].window-seconds=20"
 })
 class SecurityChainRegressionIT extends WireMockIntegrationTest {
+
+    private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
 
     @Autowired
     private RateLimitingWebFilter rateLimitingWebFilter;
@@ -101,6 +104,63 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         );
     }
 
+    @Test
+    void unauthorized_short_circuit_response_contains_optional_trace_id_header() {
+        EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult();
+
+        assertThat(result.getResponseBody()).isNotNull();
+        assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.UNAUTHORIZED.getCode());
+        assertTraceAndRequestHeaders(result);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+    }
+
+    @Test
+    void success_response_contains_optional_trace_id_header_when_present() {
+        stubTokenEndpointSuccess();
+
+        EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result = login()
+                .expectStatus().isOk()
+                .expectBody(new ParameterizedTypeReference<AppResponse<KeycloakTokenResponse>>() {})
+                .returnResult();
+
+        assertTraceAndRequestHeaders(result);
+    }
+
+    @Test
+    void forbidden_short_circuit_response_contains_optional_trace_id_header() {
+        stubIntrospectionWithoutRoles("no-role-token");
+
+        EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .header(AUTHORIZATION, "Bearer no-role-token")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult();
+
+        assertThat(result.getResponseBody()).isNotNull();
+        assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+        assertTraceAndRequestHeaders(result);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+    }
+
+    private void assertTraceAndRequestHeaders(EntityExchangeResult<?> result) {
+        String requestId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+        String traceId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+
+        assertThat(requestId).isNotBlank();
+        if (traceId != null) {
+            assertThat(traceId).isNotBlank().matches(TRACE_ID_REGEX);
+        }
+    }
+
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec login() {
         return webTestClient.post()
                 .uri("/api/auth/login")
@@ -139,6 +199,24 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
                                   "resource_access": {"spring-app": {"roles": ["CLIENT_GET"]}}
                                 }
                                 """.formatted(jkt))));
+    }
+
+    private void stubIntrospectionWithoutRoles(String token) {
+        stubFor(post(urlEqualTo(INTROSPECT_PATH))
+                .withRequestBody(containing("token=" + token))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader(CONTENT_TYPE, APPLICATION_JSON_VALUE)
+                        .withBody("""
+                                {
+                                  "active": true,
+                                  "username": "user",
+                                  "client_id": "spring-app",
+                                  "azp": "spring-app",
+                                  "realm_access": {"roles": []},
+                                  "resource_access": {"spring-app": {"roles": []}}
+                                }
+                                """)));
     }
 }
 

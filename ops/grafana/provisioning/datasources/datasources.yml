@@ -18,10 +18,12 @@ datasources:
     jsonData:
       derivedFields:
         - name: TraceID
-          matcherRegex: "\\[[^\\]]*,([0-9a-f]{32}),[0-9a-f]{16}\\]"
+          # OTLP path: otel-collector transform/logs embeds "trace_id=<32hex>" into
+          # the log body for every traced request (non-zero trace_id).
+          matcherRegex: "trace_id=([0-9a-f]{32})"
           datasourceUid: tempo
           url: '${__value.raw}'
-          urlDisplayLabel: 'View trace'
+          urlDisplayLabel: 'Open in Tempo'
 
   - name: Tempo
     uid: tempo
@@ -33,9 +35,11 @@ datasources:
       httpMethod: GET
       tracesToLogsV2:
         datasourceUid: loki
-        filterByTraceID: true
-        filterBySpanID: true
-        customQuery: false
+        # Full-text search: job label set by otel-collector from service.name.
+        # trace_id is embedded in the log body by the transform/logs processor,
+        # so |= works without promoting traceId to a high-cardinality label.
+        customQuery: true
+        query: '{job="jwt-demo-reactive"} |= "${__trace.traceId}"'
       serviceMap:
         datasourceUid: prometheus
 
