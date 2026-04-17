@@ -1,6 +1,7 @@
 package lt.satsyuk.api.integrationtest;
 
 import lt.satsyuk.dto.AppResponse;
+import lt.satsyuk.security.TraceIdResponseHeaderWebFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -23,14 +24,12 @@ class AuthValidationIT extends AbstractIntegrationTest {
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
                 .returnResult();
 
-        String traceId = result.getResponseHeaders().getFirst("X-Trace-Id");
-        String requestId = result.getResponseHeaders().getFirst("X-Request-Id");
+        String traceId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+        String requestId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
         assertThat(requestId).isNotBlank();
-        if (traceId != null) {
-            assertThat(traceId).matches(TRACE_ID_REGEX);
-        }
+        assertThat(traceId).isNotBlank().matches(TRACE_ID_REGEX);
         assertThat(result.getResponseHeaders().getAccessControlExposeHeaders())
-                .contains("X-Trace-Id", "X-Request-Id");
+                .contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER, TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
     }
 
     @Test

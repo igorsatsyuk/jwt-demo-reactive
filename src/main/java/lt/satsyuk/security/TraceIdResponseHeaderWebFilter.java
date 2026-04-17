@@ -17,9 +17,9 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Component
 @ConditionalOnProperty(name = "app.trace-id-header.enabled", havingValue = "true", matchIfMissing = true)
@@ -30,8 +30,15 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String MDC_TRACE_ID_KEY = "traceId";
-    private static final String TRACE_ID_PATTERN = "(?i)^[0-9a-f]{32}$";
+    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("^[0-9a-f]{32}$", Pattern.CASE_INSENSITIVE);
     private static final HexFormat HEX = HexFormat.of();
+    private static final ThreadLocal<MessageDigest> SHA_256 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (Exception ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
+    });
 
     private final Tracer tracer;
 
@@ -82,7 +89,7 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
     }
 
     private boolean isValidTraceId(String candidate) {
-        return StringUtils.hasText(candidate) && candidate.matches(TRACE_ID_PATTERN);
+        return StringUtils.hasText(candidate) && TRACE_ID_PATTERN.matcher(candidate).matches();
     }
 
     private String buildFallbackTraceId(String requestId) {
@@ -91,10 +98,9 @@ public class TraceIdResponseHeaderWebFilter implements WebFilter {
         }
 
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(requestId.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = SHA_256.get().digest(requestId.getBytes(StandardCharsets.UTF_8));
             return HEX.formatHex(hash, 0, 16);
-        } catch (NoSuchAlgorithmException _) {
+        } catch (RuntimeException _) {
             return UUID.randomUUID().toString().replace("-", "");
         }
     }

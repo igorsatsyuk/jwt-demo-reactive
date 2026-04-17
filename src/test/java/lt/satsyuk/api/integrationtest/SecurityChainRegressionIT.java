@@ -6,6 +6,7 @@ import lt.satsyuk.dto.KeycloakTokenResponse;
 import lt.satsyuk.dto.LoginRequest;
 import lt.satsyuk.security.DpopProofValidator;
 import lt.satsyuk.security.RateLimitingWebFilter;
+import lt.satsyuk.security.TraceIdResponseHeaderWebFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,8 +116,8 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         assertThat(result.getResponseBody()).isNotNull();
         assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.UNAUTHORIZED.getCode());
         assertTraceAndRequestHeaders(result);
-        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Trace-Id");
-        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Request-Id");
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
     }
 
     @Test
@@ -146,13 +147,13 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         assertThat(result.getResponseBody()).isNotNull();
         assertThat(result.getResponseBody().code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
         assertTraceAndRequestHeaders(result);
-        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Trace-Id");
-        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains("X-Request-Id");
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
+        assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
     }
 
     private void assertTraceAndRequestHeaders(EntityExchangeResult<?> result) {
-        String requestId = result.getResponseHeaders().getFirst("X-Request-Id");
-        String traceId = result.getResponseHeaders().getFirst("X-Trace-Id");
+        String requestId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+        String traceId = result.getResponseHeaders().getFirst(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
 
         assertThat(requestId).isNotBlank();
         assertThat(traceId).isNotBlank();

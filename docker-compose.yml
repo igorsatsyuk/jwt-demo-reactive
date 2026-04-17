@@ -32,7 +32,6 @@ services:
   tempo:
     image: grafana/tempo:2.7.2
     container_name: jwt-reactive-tempo
-    user: "0:0"
     command: ["-config.file=/etc/tempo/tempo.yml"]
     ports:
       - "3200:3200"
