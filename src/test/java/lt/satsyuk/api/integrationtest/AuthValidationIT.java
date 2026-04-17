@@ -14,7 +14,7 @@ class AuthValidationIT extends AbstractIntegrationTest {
     private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
 
     @Test
-    void login_unsupported_media_type_includes_trace_id_header() {
+    void login_unsupported_media_type_includes_optional_trace_id_header() {
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.post()
                 .uri("/api/auth/login")
                 .contentType(MediaType.TEXT_PLAIN)

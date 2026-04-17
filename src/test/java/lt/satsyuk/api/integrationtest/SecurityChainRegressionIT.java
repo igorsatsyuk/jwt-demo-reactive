@@ -105,7 +105,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     }
 
     @Test
-    void unauthorized_short_circuit_response_contains_trace_id_header() {
+    void unauthorized_short_circuit_response_contains_optional_trace_id_header() {
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
                 .uri("/api/accounts/client/1")
                 .exchange()
@@ -121,7 +121,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     }
 
     @Test
-    void success_response_contains_trace_id_header() {
+    void success_response_contains_optional_trace_id_header_when_present() {
         stubTokenEndpointSuccess();
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result = login()
@@ -133,7 +133,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     }
 
     @Test
-    void forbidden_short_circuit_response_contains_trace_id_header() {
+    void forbidden_short_circuit_response_contains_optional_trace_id_header() {
         stubIntrospectionWithoutRoles("no-role-token");
 
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
