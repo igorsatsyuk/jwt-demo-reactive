@@ -69,6 +69,7 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                  WHERE status = 'PROCESSING'
                    AND type = 'CLIENT_CREATE'
                    AND status_changed_at < :staleBefore
+                 FOR UPDATE SKIP LOCKED
             ),
             reclaimed AS (
                 UPDATE request r
@@ -76,13 +77,10 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                        status_changed_at = :now
                   FROM stale s
                  WHERE r.id = s.id
-                   AND r.status = 'PROCESSING'
-                   AND r.type = 'CLIENT_CREATE'
-                   AND r.status_changed_at < :staleBefore
                 RETURNING s.age_seconds
             )
-            SELECT COUNT(*)::integer AS "reclaimedCount",
-                   COALESCE(MAX(age_seconds), 0)::bigint AS "maxAgeSeconds"
+            SELECT COUNT(*)::integer AS reclaimed_count,
+                   COALESCE(MAX(age_seconds), 0)::bigint AS max_age_seconds
               FROM reclaimed
             """)
     Mono<ReclaimStats> reclaimStaleClientCreateRequests(@Param("staleBefore") OffsetDateTime staleBefore,

@@ -157,13 +157,12 @@ public class RequestService {
 
         OffsetDateTime staleBefore = now.minus(workerProcessingTimeout);
         return requestRepository.reclaimStaleClientCreateRequests(staleBefore, now)
-                .defaultIfEmpty(new EmptyReclaimStats())
                 .doOnNext(stats -> {
                     int reclaimed = stats.getReclaimedCount() != null ? stats.getReclaimedCount() : 0;
                     long maxAgeSeconds = stats.getMaxAgeSeconds() != null ? stats.getMaxAgeSeconds() : 0L;
                     if (reclaimed > 0) {
                         reclaimedCount.increment(reclaimed);
-                        staleProcessingAgeSeconds.record((double) maxAgeSeconds);
+                        staleProcessingAgeSeconds.record(maxAgeSeconds);
                         log.warn(
                                 "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
                                 reclaimed,
@@ -325,16 +324,5 @@ public class RequestService {
         }
     }
 
-    private static final class EmptyReclaimStats implements RequestRepository.ReclaimStats {
-        @Override
-        public Integer getReclaimedCount() {
-            return 0;
-        }
-
-        @Override
-        public Long getMaxAgeSeconds() {
-            return 0L;
-        }
-    }
 }
 
