@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ClientServiceTest {
@@ -36,9 +37,11 @@ class ClientServiceTest {
     private final ClientService clientService = new ClientService(clientRepository, accountRepository, clientMapper);
 
     @Test
-    void create_returnsConflictWhenPhoneAlreadyExists() {
+    void create_returnsConflictWhenPhoneAlreadyExistsWithoutPreCheck() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000000");
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(Mono.just(true));
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DataIntegrityViolationException("dup")));
 
         StepVerifier.create(clientService.create(request))
                 .expectErrorSatisfies(error -> {
@@ -48,8 +51,8 @@ class ClientServiceTest {
                 })
                 .verify();
 
-        verify(clientRepository, never()).save(any());
-        verify(accountRepository, never()).save(any());
+        verify(clientRepository, never()).existsByPhone(request.phone());
+        verifyNoInteractions(accountRepository);
     }
 
     @Test
@@ -60,7 +63,6 @@ class ClientServiceTest {
         Account savedAccount = Account.builder().id(20L).clientId(11L).balance(BigDecimal.ZERO).build();
         ClientResponse response = new ClientResponse(11L, "John", "Doe", request.phone());
 
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(Mono.just(false));
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.just(savedClient));
         when(accountRepository.save(any(Account.class))).thenReturn(Mono.just(savedAccount));
@@ -76,7 +78,6 @@ class ClientServiceTest {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000002");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
 
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(Mono.just(false));
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DataIntegrityViolationException("dup")));
 

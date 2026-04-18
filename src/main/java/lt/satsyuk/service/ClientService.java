@@ -32,24 +32,17 @@ public class ClientService {
     private int searchMaxResults;
 
     public Mono<ClientResponse> create(CreateClientRequest req) {
-        return repo.existsByPhone(req.phone())
-                .flatMap(exists -> {
-                    if (Boolean.TRUE.equals(exists)) {
-                        return Mono.error(new PhoneAlreadyExistsException(req.phone()));
-                    }
-
-                    Client client = mapper.toEntity(req);
-                    return repo.save(client)
-                            .onErrorMap(DataIntegrityViolationException.class,
-                                    ex -> new PhoneAlreadyExistsException(req.phone()))
-                            .flatMap(saved -> {
-                                Account account = Account.builder()
-                                        .clientId(saved.getId())
-                                        .balance(BigDecimal.ZERO)
-                                        .build();
-                                return accountRepository.save(account)
-                                        .map(acc -> mapper.toResponse(saved));
-                            });
+        Client client = mapper.toEntity(req);
+        return repo.save(client)
+                .onErrorMap(DataIntegrityViolationException.class,
+                        ex -> new PhoneAlreadyExistsException(req.phone()))
+                .flatMap(saved -> {
+                    Account account = Account.builder()
+                            .clientId(saved.getId())
+                            .balance(BigDecimal.ZERO)
+                            .build();
+                    return accountRepository.save(account)
+                            .map(acc -> mapper.toResponse(saved));
                 });
     }
 
