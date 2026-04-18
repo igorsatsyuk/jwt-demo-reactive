@@ -13,20 +13,22 @@ import lt.satsyuk.repository.ClientRepository;
 import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
+    private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
+    private static final String PHONE_UNIQUE_CONSTRAINT = "client_phone_key";
 
     private final ClientRepository repo;
     private final AccountRepository accountRepository;
@@ -45,21 +47,22 @@ public class ClientService {
                             .balance(BigDecimal.ZERO)
                             .build();
                     return accountRepository.save(account)
-                            .thenReturn(mapper.toResponse(saved));
+                            .then(Mono.fromSupplier(() -> mapper.toResponse(saved)));
                 });
     }
 
     private boolean isPhoneUniqueViolation(Throwable throwable) {
+        if (!hasPhoneConstraint(throwable)) {
+            return false;
+        }
+
         Throwable current = throwable;
         while (current != null) {
             if (current instanceof DuplicateKeyException) {
                 return true;
             }
             if (current instanceof R2dbcDataIntegrityViolationException integrity
-                    && "23505".equals(integrity.getSqlState())) {
-                return true;
-            }
-            if (current instanceof DataIntegrityViolationException && hasDuplicateKeyMessage(current)) {
+                    && UNIQUE_VIOLATION_SQLSTATE.equals(integrity.getSqlState())) {
                 return true;
             }
             current = current.getCause();
@@ -67,15 +70,53 @@ public class ClientService {
         return false;
     }
 
-    private boolean hasDuplicateKeyMessage(Throwable throwable) {
-        String message = throwable.getMessage();
-        if (message == null) {
-            return false;
+    private boolean hasPhoneConstraint(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String constraintName = extractConstraintName(current);
+            if (PHONE_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraintName)) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.contains(PHONE_UNIQUE_CONSTRAINT)) {
+                return true;
+            }
+            current = current.getCause();
         }
-        String normalized = message.toLowerCase(Locale.ROOT);
-        return normalized.contains("duplicate key")
-                || normalized.contains("unique constraint")
-                || normalized.contains("client_phone_key");
+        return false;
+    }
+
+    private String extractConstraintName(Throwable throwable) {
+        String directConstraint = invokeStringGetter(throwable, "getConstraintName");
+        if (directConstraint != null) {
+            return directConstraint;
+        }
+
+        Object errorDetails = invokeGetter(throwable, "getErrorDetails");
+        String detailsConstraint = invokeStringGetter(errorDetails, "getConstraintName");
+        if (detailsConstraint != null) {
+            return detailsConstraint;
+        }
+
+        Object serverError = invokeGetter(throwable, "getServerErrorMessage");
+        return invokeStringGetter(serverError, "getConstraint");
+    }
+
+    private Object invokeGetter(Object target, String getterName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            Method method = target.getClass().getMethod(getterName);
+            return method.invoke(target);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String invokeStringGetter(Object target, String getterName) {
+        Object value = invokeGetter(target, getterName);
+        return value instanceof String str ? str : null;
     }
 
     public Mono<ClientResponse> get(Long id) {

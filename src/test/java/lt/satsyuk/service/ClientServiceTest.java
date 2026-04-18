@@ -24,6 +24,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -53,17 +54,18 @@ class ClientServiceTest {
                 })
                 .verify();
 
-        verify(clientRepository, never()).existsByPhone(request.phone());
+        verify(clientRepository, never()).existsByPhone(anyString());
         verifyNoInteractions(accountRepository);
     }
 
     @Test
-    void create_returnsConflictWhenSqlStateIndicatesUniqueViolation() {
+    void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000006");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
-        Throwable wrapped = new DataIntegrityViolationException(
-                "wrap",
-                new R2dbcDataIntegrityViolationException("duplicate", "23505")
+        Throwable wrapped = new R2dbcDataIntegrityViolationException(
+                "duplicate",
+                "23505",
+                new ConstraintCarrierException("client_phone_key")
         );
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(wrapped));
@@ -79,11 +81,12 @@ class ClientServiceTest {
     }
 
     @Test
-    void create_returnsConflictWhenUniqueConstraintAppearsInMessage() {
+    void create_returnsConflictWhenConstraintAppearsInSqlExceptionMessage() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000007");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
-        DataIntegrityViolationException violation = new DataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"client_phone_key\""
+        R2dbcDataIntegrityViolationException violation = new R2dbcDataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"client_phone_key\"",
+                "23505"
         );
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(violation));
@@ -92,6 +95,25 @@ class ClientServiceTest {
                 .expectErrorSatisfies(error -> {
                     assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
                     assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                })
+                .verify();
+
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    void create_propagatesUniqueViolationForNonPhoneConstraint() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000008");
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        DuplicateKeyException error = new DuplicateKeyException("account_client_id_key");
+
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(error));
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(actual -> {
+                    assertThat(actual).isInstanceOf(DuplicateKeyException.class);
+                    assertThat(actual).isSameAs(error);
                 })
                 .verify();
 
@@ -181,5 +203,17 @@ class ClientServiceTest {
         StepVerifier.create(clientService.searchByNameOrSurname("  Smith  "))
                 .assertNext(result -> assertThat(result).isEqualTo(List.of(r1, r2)))
                 .verifyComplete();
+    }
+
+    private static final class ConstraintCarrierException extends RuntimeException {
+        private final String constraintName;
+
+        private ConstraintCarrierException(String constraintName) {
+            this.constraintName = constraintName;
+        }
+
+        public String getConstraintName() {
+            return constraintName;
+        }
     }
 }
