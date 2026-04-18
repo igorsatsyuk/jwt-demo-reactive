@@ -31,6 +31,7 @@ $env:PERF_SMOKE_CLIENT_SECRET = "<client-secret>"
 
 Optional:
 - `PERF_SMOKE_CLIENT_ID` (defaults to `spring-app`)
+- `-Insecure` to skip certificate validation for local/self-signed HTTPS endpoints
 
 Then run:
 
@@ -40,6 +41,17 @@ pwsh ./ops/perf/perf-smoke.ps1 `
   -Requests 50 `
   -WarmupRequests 5 `
   -ClientId spring-app
+```
+
+HTTPS example:
+
+```pwsh
+pwsh ./ops/perf/perf-smoke.ps1 `
+  -BaseUrl https://localhost:8081 `
+  -Requests 50 `
+  -WarmupRequests 5 `
+  -ClientId spring-app `
+  -Insecure
 ```
 
 Outputs are written to `target/perf`:

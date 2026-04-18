@@ -17,6 +17,40 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Unescape-PrometheusLabelValue {
+    param([string]$EscapedValue)
+
+    if ([string]::IsNullOrEmpty($EscapedValue)) {
+        return $EscapedValue
+    }
+
+    $builder = [System.Text.StringBuilder]::new()
+    $chars = $EscapedValue.ToCharArray()
+    for ($i = 0; $i -lt $chars.Length; $i++) {
+        $ch = $chars[$i]
+        if ($ch -ne '\') {
+            [void]$builder.Append($ch)
+            continue
+        }
+
+        if ($i -eq ($chars.Length - 1)) {
+            [void]$builder.Append('\')
+            break
+        }
+
+        $i++
+        $next = $chars[$i]
+        switch ($next) {
+            '\' { [void]$builder.Append('\') }
+            '"' { [void]$builder.Append('"') }
+            'n' { [void]$builder.Append("`n") }
+            default { [void]$builder.Append($next) }
+        }
+    }
+
+    return $builder.ToString()
+}
+
 function Convert-LabelStringToHashtable {
     param([string]$LabelString)
 
@@ -28,7 +62,7 @@ function Convert-LabelStringToHashtable {
     $pattern = '([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"])*)"'
     foreach ($match in [System.Text.RegularExpressions.Regex]::Matches($LabelString, $pattern)) {
         $key = $match.Groups[1].Value
-        $value = $match.Groups[2].Value -replace '\\\\', '\' -replace '\"', '"'
+        $value = Unescape-PrometheusLabelValue -EscapedValue $match.Groups[2].Value
         $labels[$key] = $value
     }
 
@@ -433,7 +467,6 @@ $summary = [ordered]@{
         requests = $Requests
         warmupRequests = $WarmupRequests
         requestTimeoutSec = $RequestTimeoutSec
-        username = $Username
         clientId = $ClientId
     }
     client = [ordered]@{
