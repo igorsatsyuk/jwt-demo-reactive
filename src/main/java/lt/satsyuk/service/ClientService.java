@@ -7,7 +7,6 @@ import lt.satsyuk.exception.ClientSearchQueryTooShortException;
 import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.mapper.ClientMapper;
 import lt.satsyuk.model.Account;
-import lt.satsyuk.model.Client;
 import lt.satsyuk.repository.AccountRepository;
 import lt.satsyuk.repository.ClientRepository;
 import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
