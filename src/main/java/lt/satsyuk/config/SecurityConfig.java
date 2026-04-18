@@ -9,17 +9,14 @@ import lt.satsyuk.security.KeycloakReactiveOpaqueTokenIntrospector;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.server.resource.introspection.ReactiveOpaqueTokenIntrospector;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
-import java.time.Duration;
-
 @Configuration
 @EnableReactiveMethodSecurity
-@EnableConfigurationProperties({RateLimitProperties.class, DpopProperties.class})
+@EnableConfigurationProperties({RateLimitProperties.class, DpopProperties.class, OpaqueTokenCacheProperties.class})
 public class SecurityConfig {
 
     @Bean
@@ -57,16 +54,19 @@ public class SecurityConfig {
     @Bean
     public ReactiveOpaqueTokenIntrospector reactiveOpaqueTokenIntrospector(KeycloakProperties props,
                                                                            KeycloakOpaqueRoleConverter roleConverter,
-                                                                           @Value("${security.opaque-token.cache.enabled:true}") boolean cacheEnabled,
-                                                                           @Value("${security.opaque-token.cache.ttl:10s}") Duration cacheTtl,
-                                                                           @Value("${security.opaque-token.cache.max-size:10000}") long cacheMaxSize) {
+                                                                           OpaqueTokenCacheProperties cacheProperties) {
         ReactiveOpaqueTokenIntrospector delegate = new KeycloakReactiveOpaqueTokenIntrospector(
                 props.getIntrospectionUrl(),
                 props.getResourceClientId(),
                 props.getResourceClientSecret(),
                 roleConverter
         );
-        return new CachingReactiveOpaqueTokenIntrospector(delegate, cacheEnabled, cacheTtl, cacheMaxSize);
+        return new CachingReactiveOpaqueTokenIntrospector(
+                delegate,
+                cacheProperties.isEnabled(),
+                cacheProperties.getTtl(),
+                cacheProperties.getMaxSize()
+        );
     }
 
     @Bean
