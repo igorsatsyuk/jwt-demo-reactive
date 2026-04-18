@@ -198,95 +198,49 @@ Authorization options:
 
 ## 📊 Sequence Diagram (Login / Refresh / Logout)
 
-```text
-===========================================================
-                       LOGIN FLOW
-===========================================================
+### Login flow
 
-Client
-  |
-  | 1. POST /api/auth/login
-  |    { username, password, clientId, clientSecret }
-  v
-Spring Boot (AuthController)
-  |
-  | 2. KeycloakReactiveAuthService.login()
-  v
-Keycloak
-  |
-  | 3. POST /realms/my-realm/protocol/openid-connect/token
-  |      grant_type=password
-  |      username, password
-  |      client_id, client_secret
-  |
-  | 4. 200 OK
-  |      { access_token, refresh_token }
-  v
-Spring Boot
-  |
-  | 5. Wrap into AppResponse
-  v
-Client
+```mermaid
+sequenceDiagram
+    actor C as Client
+    participant S as Spring Boot (AuthController)
+    participant K as Keycloak
+
+    C->>S: 1) POST /api/auth/login<br/>{username, password, clientId, clientSecret}
+    S->>K: 2) KeycloakReactiveAuthService.login()
+    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/token<br/>grant_type=password<br/>username, password<br/>client_id, client_secret
+    K-->>S: 4) 200 OK<br/>{access_token, refresh_token}
+    S-->>C: 5) AppResponse(code=0, data=tokens)
 ```
 
-```text
-===========================================================
-                      REFRESH FLOW
-===========================================================
+### Refresh flow
 
-Client
-  |
-  | 1. POST /api/auth/refresh
-  |    { refreshToken, clientId, clientSecret }
-  v
-Spring Boot
-  |
-  | 2. KeycloakReactiveAuthService.refresh()
-  v
-Keycloak
-  |
-  | 3. POST /realms/my-realm/protocol/openid-connect/token
-  |      grant_type=refresh_token
-  |      refresh_token
-  |      client_id, client_secret
-  |
-  | 4. 200 OK
-  |      { new_access_token, new_refresh_token }
-  v
-Spring Boot
-  |
-  | 5. Wrap into AppResponse
-  v
-Client
+```mermaid
+sequenceDiagram
+    actor C as Client
+    participant S as Spring Boot (AuthController)
+    participant K as Keycloak
+
+    C->>S: 1) POST /api/auth/refresh<br/>{refreshToken, clientId, clientSecret}
+    S->>K: 2) KeycloakReactiveAuthService.refresh()
+    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/token<br/>grant_type=refresh_token<br/>refresh_token<br/>client_id, client_secret
+    K-->>S: 4) 200 OK<br/>{new_access_token, new_refresh_token}
+    S-->>C: 5) AppResponse(code=0, data=tokens)
 ```
 
-```text
-===========================================================
-                      LOGOUT FLOW
-===========================================================
+### Logout flow
 
-Client
-  |
-  | 1. POST /api/auth/logout
-  |    { refreshToken, clientId, clientSecret }
-  v
-Spring Boot
-  |
-  | 2. KeycloakReactiveAuthService.logout()
-  v
-Keycloak
-  |
-  | 3. POST /realms/my-realm/protocol/openid-connect/logout
-  |      client_id, client_secret
-  |      refresh_token
-  |
-  | 4. 200 OK (Keycloak behavior)
-  v
-Spring Boot
-  |
-  | 5. Return AppResponse(code=0)
-  v
-Client
+```mermaid
+sequenceDiagram
+    actor C as Client
+    participant S as Spring Boot (AuthController)
+    participant K as Keycloak
+
+    C->>S: 1) POST /api/auth/logout<br/>{refreshToken, clientId, clientSecret}
+    S->>K: 2) KeycloakReactiveAuthService.logout()
+    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/logout<br/>client_id, client_secret<br/>refresh_token
+    K-->>S: 4) 200 OK (Keycloak behavior)
+    S-->>C: 5) AppResponse(code=0)
 ```
 
 ---
