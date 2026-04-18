@@ -156,21 +156,21 @@ public class RequestService {
         }
 
         OffsetDateTime staleBefore = now.minus(workerProcessingTimeout);
-        return requestRepository.findMaxStaleClientCreateAgeSeconds(staleBefore, now)
-                .defaultIfEmpty(0L)
-                .flatMap(maxAgeSeconds -> requestRepository.reclaimStaleClientCreateRequests(staleBefore, now)
-                        .doOnNext(reclaimed -> {
-                            if (reclaimed > 0) {
-                                reclaimedCount.increment(reclaimed);
-                                staleProcessingAgeSeconds.record(maxAgeSeconds.doubleValue());
-                                log.warn(
-                                        "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
-                                        reclaimed,
-                                        workerProcessingTimeout,
-                                        maxAgeSeconds
-                                );
-                            }
-                        }))
+        return requestRepository.reclaimStaleClientCreateRequests(staleBefore, now)
+                .doOnNext(stats -> {
+                    int reclaimed = stats.getReclaimedCount() != null ? stats.getReclaimedCount() : 0;
+                    long maxAgeSeconds = stats.getMaxAgeSeconds() != null ? stats.getMaxAgeSeconds() : 0L;
+                    if (reclaimed > 0) {
+                        reclaimedCount.increment(reclaimed);
+                        staleProcessingAgeSeconds.record(maxAgeSeconds);
+                        log.warn(
+                                "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
+                                reclaimed,
+                                workerProcessingTimeout,
+                                maxAgeSeconds
+                        );
+                    }
+                })
                 .then();
     }
 
@@ -323,5 +323,6 @@ public class RequestService {
             throw new IllegalStateException("Failed to deserialize JSON payload", ex);
         }
     }
+
 }
 

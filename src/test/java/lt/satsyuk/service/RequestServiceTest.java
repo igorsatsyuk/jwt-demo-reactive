@@ -12,6 +12,7 @@ import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
+import lt.satsyuk.testutil.ReclaimStatsTestUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -256,20 +257,18 @@ class RequestServiceTest {
         Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", OffsetDateTime.now());
 
         StepVerifier.create(result).verifyComplete();
-        verify(requestRepository, never()).findMaxStaleClientCreateAgeSeconds(any(), any());
         verify(requestRepository, never()).reclaimStaleClientCreateRequests(any(), any());
     }
 
     @Test
     void reclaimStaleProcessingRequests_reclaimsAndRecordsMetricsWhenRowsFound() {
         ReflectionTestUtils.setField(requestService, "workerProcessingTimeout", Duration.ofMinutes(2));
-        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any())).thenReturn(Mono.just(45L));
-        when(requestRepository.reclaimStaleClientCreateRequests(any(), any())).thenReturn(Mono.just(2));
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(2, 45)));
 
         Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", OffsetDateTime.now());
 
         StepVerifier.create(result).verifyComplete();
-        verify(requestRepository).findMaxStaleClientCreateAgeSeconds(any(), any());
         verify(requestRepository).reclaimStaleClientCreateRequests(any(), any());
     }
 
@@ -323,8 +322,8 @@ class RequestServiceTest {
         ReflectionTestUtils.setField(requestService, "workerRetryMaxAttempts", 1L);
         ReflectionTestUtils.setField(requestService, "workerRetryBackoffMs", 1L);
 
-        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any())).thenReturn(Mono.just(0L));
-        when(requestRepository.reclaimStaleClientCreateRequests(any(), any())).thenReturn(Mono.just(0));
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(0, 0)));
         when(requestRepository.claimPendingClientCreateBatch(any(Integer.class), any())).thenReturn(Flux.empty());
 
         requestService.processPendingRequests();
@@ -365,4 +364,5 @@ class RequestServiceTest {
         assertThat(result).isNotNull();
         return result;
     }
+
 }

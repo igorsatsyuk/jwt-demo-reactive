@@ -61,27 +61,30 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
     Flux<Request> claimPendingClientCreateBatch(@Param("batchSize") int batchSize,
                                                 @Param("now") OffsetDateTime now);
 
-    @Modifying
     @Query("""
-            UPDATE request
-               SET status = 'PENDING',
-                   status_changed_at = :now
-             WHERE status = 'PROCESSING'
-               AND type = 'CLIENT_CREATE'
-               AND status_changed_at < :staleBefore
+            WITH stale AS (
+                SELECT id,
+                       EXTRACT(EPOCH FROM (:now - status_changed_at))::bigint AS age_seconds
+                  FROM request
+                 WHERE status = 'PROCESSING'
+                   AND type = 'CLIENT_CREATE'
+                   AND status_changed_at < :staleBefore
+                 FOR UPDATE SKIP LOCKED
+            ),
+            reclaimed AS (
+                UPDATE request r
+                   SET status = 'PENDING',
+                       status_changed_at = :now
+                  FROM stale s
+                 WHERE r.id = s.id
+                RETURNING s.age_seconds
+            )
+            SELECT COUNT(*)::integer AS "reclaimedCount",
+                   COALESCE(MAX(age_seconds), 0)::bigint AS "maxAgeSeconds"
+              FROM reclaimed
             """)
-    Mono<Integer> reclaimStaleClientCreateRequests(@Param("staleBefore") OffsetDateTime staleBefore,
-                                                   @Param("now") OffsetDateTime now);
-
-    @Query("""
-            SELECT COALESCE(MAX(EXTRACT(EPOCH FROM (:now - status_changed_at)))::bigint, 0)
-              FROM request
-             WHERE status = 'PROCESSING'
-               AND type = 'CLIENT_CREATE'
-               AND status_changed_at < :staleBefore
-            """)
-    Mono<Long> findMaxStaleClientCreateAgeSeconds(@Param("staleBefore") OffsetDateTime staleBefore,
-                                                  @Param("now") OffsetDateTime now);
+    Mono<ReclaimStats> reclaimStaleClientCreateRequests(@Param("staleBefore") OffsetDateTime staleBefore,
+                                                         @Param("now") OffsetDateTime now);
 
     @Modifying
     @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND status = 'PROCESSING'")
@@ -94,5 +97,11 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
     Mono<Integer> markFailed(@Param("id") UUID id,
                              @Param("responseData") String responseData,
                              @Param("now") OffsetDateTime now);
+
+    interface ReclaimStats {
+        Integer getReclaimedCount();
+
+        Long getMaxAgeSeconds();
+    }
 }
 
