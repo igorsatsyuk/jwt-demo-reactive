@@ -59,6 +59,23 @@ class ClientServiceTest {
     }
 
     @Test
+    void create_returnsConflictWhenLegacyConstraintNameIsReported() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000009");
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
+                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                })
+                .verify();
+
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
     void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000006");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
@@ -118,6 +135,22 @@ class ClientServiceTest {
                 .verify();
 
         verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    void create_emitsMapperFailureReactively() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000010");
+        IllegalStateException mapperFailure = new IllegalStateException("mapper failed");
+        when(clientMapper.toEntity(request)).thenThrow(mapperFailure);
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(IllegalStateException.class);
+                    assertThat(error).isSameAs(mapperFailure);
+                })
+                .verify();
+
+        verifyNoInteractions(clientRepository, accountRepository);
     }
 
     @Test

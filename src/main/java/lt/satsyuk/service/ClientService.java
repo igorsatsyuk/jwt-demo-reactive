@@ -19,6 +19,7 @@ import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.util.Set;
 import java.util.List;
 
 @Service
@@ -27,7 +28,10 @@ public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
-    private static final String PHONE_UNIQUE_CONSTRAINT = "uq_client_phone";
+    private static final Set<String> PHONE_UNIQUE_CONSTRAINTS = Set.of(
+            "uq_client_phone",
+            "client_phone_key"
+    );
 
     private final ClientRepository repo;
     private final AccountRepository accountRepository;
@@ -36,8 +40,8 @@ public class ClientService {
     private int searchMaxResults;
 
     public Mono<ClientResponse> create(CreateClientRequest req) {
-        Client client = mapper.toEntity(req);
-        return repo.save(client)
+        return Mono.fromSupplier(() -> mapper.toEntity(req))
+                .flatMap(repo::save)
                 .onErrorMap(this::isPhoneUniqueViolation,
                         _ -> new PhoneAlreadyExistsException(req.phone()))
                 .flatMap(saved -> {
@@ -56,11 +60,11 @@ public class ClientService {
         Throwable current = throwable;
         while (current != null) {
             String constraintName = extractConstraintName(current);
-            if (PHONE_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraintName)) {
+            if (isPhoneConstraintName(constraintName)) {
                 hasPhoneConstraint = true;
             }
             String message = current.getMessage();
-            if (message != null && message.contains(PHONE_UNIQUE_CONSTRAINT)) {
+            if (containsPhoneConstraintName(message)) {
                 hasPhoneConstraint = true;
             }
 
@@ -78,6 +82,22 @@ public class ClientService {
             current = current.getCause();
         }
         return false;
+    }
+
+    private boolean isPhoneConstraintName(String constraintName) {
+        if (constraintName == null) {
+            return false;
+        }
+        return PHONE_UNIQUE_CONSTRAINTS.stream()
+                .anyMatch(knownConstraint -> knownConstraint.equalsIgnoreCase(constraintName));
+    }
+
+    private boolean containsPhoneConstraintName(String message) {
+        if (message == null) {
+            return false;
+        }
+        return PHONE_UNIQUE_CONSTRAINTS.stream()
+                .anyMatch(message::contains);
     }
 
     private String extractConstraintName(Throwable throwable) {
