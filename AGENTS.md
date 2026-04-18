@@ -41,3 +41,17 @@
 - For validation/error shaping, prefer `GlobalExceptionHandler` + typed domain exceptions (`*NotFoundException`, `PhoneAlreadyExistsException`, etc.).
 - For new async request types, update all three layers together: DB constraints/migration (`request.type` check), worker claim/process logic, and integration tests.
 
+## Git workflow defaults (for AI and developers)
+- Base branch: create work branches from `master` unless task explicitly says otherwise.
+- Branch naming: use `feature/`, `bugfix/`, `hotfix/`, `chore/`, `docs/`, `test/` (for example: `docs/update-reactive-api-docs`).
+- Commit format: use Conventional Commits, `<type>(<scope>): <short description>`.
+- Commit style: prefer small atomic commits grouped by one logical change; avoid mixing refactor + feature + docs in one commit.
+- Staging discipline: stage only relevant files (`git add <files>`), do not use broad staging without checking `git status`.
+- Safety: never commit `.env`, secrets, tokens, or generated runtime artifacts from `target/`.
+- Validation before commit:
+  - docs-only change: at minimum recheck modified files + `git status`
+  - code change: run `mvn test`
+  - security/infra/async-worker critical changes: run `mvn verify`
+- Sync before push: prefer `git pull --rebase` on current branch, resolve conflicts locally, then push.
+- History policy: do not force-push and do not rewrite shared history unless explicitly requested.
+- If user asks to "commit" without extra details, apply these defaults and proceed with a single well-scoped commit.
