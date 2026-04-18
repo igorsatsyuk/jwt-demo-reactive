@@ -30,7 +30,7 @@
   - [x] Security: добавить кэш интроспекции opaque token (TTL + max-size)
   - [x] DB: убрать лишние round-trip в create-пути клиента (`existsByPhone` -> upsert/insert-first стратегия)
   - [x] Worker: сократить reclaim-запросы (объединение метрик/апдейта, где возможно)
-  - [x] DB: добавить индекс под claim-путь request worker (`status`, `type`, `created_at`)
+  - [x] DB: добавить partial index под claim-путь request worker (`created_at` where `status='PENDING'` and `type='CLIENT_CREATE'`)
   - [ ] Observability: добавить базовый perf smoke сценарий и метрики сравнения до/после
 
 ## Low

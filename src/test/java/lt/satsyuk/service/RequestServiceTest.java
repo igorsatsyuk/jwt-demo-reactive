@@ -12,6 +12,7 @@ import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
+import lt.satsyuk.testutil.ReclaimStatsTestUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -263,7 +264,7 @@ class RequestServiceTest {
     void reclaimStaleProcessingRequests_reclaimsAndRecordsMetricsWhenRowsFound() {
         ReflectionTestUtils.setField(requestService, "workerProcessingTimeout", Duration.ofMinutes(2));
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
-                .thenReturn(Mono.just(reclaimStats(2, 45)));
+                .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(2, 45)));
 
         Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", OffsetDateTime.now());
 
@@ -322,7 +323,7 @@ class RequestServiceTest {
         ReflectionTestUtils.setField(requestService, "workerRetryBackoffMs", 1L);
 
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
-                .thenReturn(Mono.just(reclaimStats(0, 0)));
+                .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(0, 0)));
         when(requestRepository.claimPendingClientCreateBatch(any(Integer.class), any())).thenReturn(Flux.empty());
 
         requestService.processPendingRequests();
@@ -364,17 +365,4 @@ class RequestServiceTest {
         return result;
     }
 
-    private static RequestRepository.ReclaimStats reclaimStats(int reclaimedCount, long maxAgeSeconds) {
-        return new RequestRepository.ReclaimStats() {
-            @Override
-            public Integer getReclaimedCount() {
-                return reclaimedCount;
-            }
-
-            @Override
-            public Long getMaxAgeSeconds() {
-                return maxAgeSeconds;
-            }
-        };
-    }
 }

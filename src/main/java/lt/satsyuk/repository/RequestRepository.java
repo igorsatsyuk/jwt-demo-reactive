@@ -79,8 +79,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                  WHERE r.id = s.id
                 RETURNING s.age_seconds
             )
-            SELECT COUNT(*)::integer AS reclaimed_count,
-                   COALESCE(MAX(age_seconds), 0)::bigint AS max_age_seconds
+            SELECT COUNT(*)::integer AS "reclaimedCount",
+                   COALESCE(MAX(age_seconds), 0)::bigint AS "maxAgeSeconds"
               FROM reclaimed
             """)
     Mono<ReclaimStats> reclaimStaleClientCreateRequests(@Param("staleBefore") OffsetDateTime staleBefore,
