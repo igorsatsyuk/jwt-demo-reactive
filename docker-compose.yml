@@ -32,6 +32,8 @@ services:
   tempo:
     image: grafana/tempo:2.7.2
     container_name: jwt-reactive-tempo
+    # Local named volume is root-owned; run as root so Tempo can create wal/blocks dirs.
+    user: "0:0"
     command: ["-config.file=/etc/tempo/tempo.yml"]
     ports:
       - "3200:3200"
@@ -108,6 +110,7 @@ services:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      ROOT_LOG_LEVEL: ${ROOT_LOG_LEVEL:-INFO}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-jwt-demo-reactive}
       KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL:-http://keycloak:8080}
       KEYCLOAK_RESOURCE_CLIENT_ID: ${KEYCLOAK_RESOURCE_CLIENT_ID}
