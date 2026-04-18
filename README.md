@@ -249,13 +249,34 @@ sequenceDiagram
 
 `POST /api/clients` does not create a client synchronously.
 
-1. API validates request payload.
-2. A `request` row is inserted with `type=CLIENT_CREATE` and `status=PENDING`.
-3. Worker claims pending rows using `FOR UPDATE SKIP LOCKED`.
-4. Claimed rows move to `PROCESSING`.
-5. On success: status becomes `COMPLETED`, response JSON is stored.
-6. On failure: status becomes `FAILED`, error JSON is stored.
-7. Caller polls `GET /api/requests/{id}` until terminal status.
+```mermaid
+sequenceDiagram
+    actor C as Caller
+    participant A as API (/api/clients)
+    participant D as request table (PostgreSQL)
+    participant W as Request Worker
+
+    C->>A: POST /api/clients
+    A->>A: Validate payload
+    A->>D: INSERT type=CLIENT_CREATE, status=PENDING
+    A-->>C: AppResponse(code=0, data={requestId})
+
+    loop Poll until terminal status
+        C->>A: GET /api/requests/{id}
+        A->>D: SELECT status by id
+        A-->>C: status=PENDING|PROCESSING|COMPLETED|FAILED
+    end
+
+    W->>D: Reclaim stale PROCESSING rows
+    W->>D: Claim PENDING batch (FOR UPDATE SKIP LOCKED)
+    W->>D: UPDATE status=PROCESSING
+
+    alt Success
+        W->>D: UPDATE status=COMPLETED, response_json
+    else Failure
+        W->>D: UPDATE status=FAILED, error_json
+    end
+```
 
 For multi-instance safety, stale `PROCESSING` reclaim is implemented and indexed (`V2__add_request_reclaim_index.sql`).
 
