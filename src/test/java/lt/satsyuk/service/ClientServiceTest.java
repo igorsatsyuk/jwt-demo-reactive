@@ -10,6 +10,7 @@ import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
 import lt.satsyuk.repository.AccountRepository;
 import lt.satsyuk.repository.ClientRepository;
+import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -53,6 +54,47 @@ class ClientServiceTest {
                 .verify();
 
         verify(clientRepository, never()).existsByPhone(request.phone());
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    void create_returnsConflictWhenSqlStateIndicatesUniqueViolation() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000006");
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        Throwable wrapped = new DataIntegrityViolationException(
+                "wrap",
+                new R2dbcDataIntegrityViolationException("duplicate", "23505")
+        );
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(wrapped));
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
+                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                })
+                .verify();
+
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    void create_returnsConflictWhenUniqueConstraintAppearsInMessage() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000007");
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        DataIntegrityViolationException violation = new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"client_phone_key\""
+        );
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(violation));
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
+                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                })
+                .verify();
+
         verifyNoInteractions(accountRepository);
     }
 
