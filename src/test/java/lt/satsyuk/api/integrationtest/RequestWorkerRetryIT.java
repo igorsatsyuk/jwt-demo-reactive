@@ -75,10 +75,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
 
-        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
-                .thenReturn(Mono.just(0L));
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
-                .thenReturn(Mono.just(0));
+                .thenReturn(Mono.just(reclaimStats(0, 0)));
 
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
@@ -110,10 +108,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
     void worker_exhausts_retry_and_logs_final_error_without_mark_completed(CapturedOutput output) {
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
 
-        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
-                .thenReturn(Mono.just(0L));
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
-                .thenReturn(Mono.just(0));
+                .thenReturn(Mono.just(reclaimStats(0, 0)));
 
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
@@ -142,10 +138,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
     void worker_does_not_retry_on_non_transient_error_and_logs_final_error(CapturedOutput output) {
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
 
-        when(requestRepository.findMaxStaleClientCreateAgeSeconds(any(), any()))
-                .thenReturn(Mono.just(0L));
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
-                .thenReturn(Mono.just(0));
+                .thenReturn(Mono.just(reclaimStats(0, 0)));
 
         when(requestRepository.claimPendingClientCreateBatch(anyInt(), any()))
                 .thenReturn(Flux.defer(() -> {
@@ -165,6 +159,20 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     verify(requestRepository, never()).markFailed(any(), anyString(), any());
                     assertThat(output.getOut()).contains("Request worker iteration failed");
                 });
+    }
+
+    private static RequestRepository.ReclaimStats reclaimStats(int reclaimedCount, long maxAgeSeconds) {
+        return new RequestRepository.ReclaimStats() {
+            @Override
+            public Integer getReclaimedCount() {
+                return reclaimedCount;
+            }
+
+            @Override
+            public Long getMaxAgeSeconds() {
+                return maxAgeSeconds;
+            }
+        };
     }
 
 }
