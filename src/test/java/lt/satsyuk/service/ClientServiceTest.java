@@ -44,7 +44,7 @@ class ClientServiceTest {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000000");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("uq_client_phone")));
 
         StepVerifier.create(clientService.create(request))
                 .expectErrorSatisfies(error -> {
@@ -65,7 +65,7 @@ class ClientServiceTest {
         Throwable wrapped = new R2dbcDataIntegrityViolationException(
                 "duplicate",
                 "23505",
-                new ConstraintCarrierException("client_phone_key")
+                new ConstraintCarrierException("uq_client_phone")
         );
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(wrapped));
@@ -85,7 +85,7 @@ class ClientServiceTest {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000007");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
         R2dbcDataIntegrityViolationException violation = new R2dbcDataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"client_phone_key\"",
+                "duplicate key value violates unique constraint \"uq_client_phone\"",
                 "23505"
         );
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);

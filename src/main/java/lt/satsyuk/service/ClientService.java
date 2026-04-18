@@ -27,7 +27,7 @@ public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
-    private static final String PHONE_UNIQUE_CONSTRAINT = "client_phone_key";
+    private static final String PHONE_UNIQUE_CONSTRAINT = "uq_client_phone";
 
     private final ClientRepository repo;
     private final AccountRepository accountRepository;
@@ -51,33 +51,28 @@ public class ClientService {
     }
 
     private boolean isPhoneUniqueViolation(Throwable throwable) {
-        if (!hasPhoneConstraint(throwable)) {
-            return false;
-        }
-
-        Throwable current = throwable;
-        while (current != null) {
-            if (current instanceof DuplicateKeyException) {
-                return true;
-            }
-            if (current instanceof R2dbcDataIntegrityViolationException integrity
-                    && UNIQUE_VIOLATION_SQLSTATE.equals(integrity.getSqlState())) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
-
-    private boolean hasPhoneConstraint(Throwable throwable) {
+        boolean hasPhoneConstraint = false;
+        boolean isUniqueViolation = false;
         Throwable current = throwable;
         while (current != null) {
             String constraintName = extractConstraintName(current);
             if (PHONE_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraintName)) {
-                return true;
+                hasPhoneConstraint = true;
             }
             String message = current.getMessage();
             if (message != null && message.contains(PHONE_UNIQUE_CONSTRAINT)) {
+                hasPhoneConstraint = true;
+            }
+
+            if (current instanceof DuplicateKeyException) {
+                isUniqueViolation = true;
+            }
+            if (current instanceof R2dbcDataIntegrityViolationException integrity
+                    && UNIQUE_VIOLATION_SQLSTATE.equals(integrity.getSqlState())) {
+                isUniqueViolation = true;
+            }
+
+            if (hasPhoneConstraint && isUniqueViolation) {
                 return true;
             }
             current = current.getCause();
