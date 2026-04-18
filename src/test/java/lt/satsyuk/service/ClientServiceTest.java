@@ -12,6 +12,7 @@ import lt.satsyuk.repository.AccountRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -41,7 +42,7 @@ class ClientServiceTest {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000000");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DataIntegrityViolationException("dup")));
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
 
         StepVerifier.create(clientService.create(request))
                 .expectErrorSatisfies(error -> {
@@ -74,21 +75,22 @@ class ClientServiceTest {
     }
 
     @Test
-    void create_mapsDataIntegrityViolationToPhoneAlreadyExists() {
+    void create_propagatesGenericDataIntegrityViolation() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000002");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        DataIntegrityViolationException error = new DataIntegrityViolationException("not null");
 
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DataIntegrityViolationException("dup")));
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(error));
 
         StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                .expectErrorSatisfies(actual -> {
+                    assertThat(actual).isInstanceOf(DataIntegrityViolationException.class);
+                    assertThat(actual).isSameAs(error);
                 })
                 .verify();
 
-        verify(accountRepository, never()).save(any());
+        verifyNoInteractions(accountRepository);
     }
 
     @Test
