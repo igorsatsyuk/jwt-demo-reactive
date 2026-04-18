@@ -5,12 +5,16 @@ Thanks for contributing. This guide describes project-specific workflow and stan
 ## Table of Contents
 
 - Development Environment Setup
+- Local Run Modes
+- Post-start Smoke Checks
 - Project Structure
 - Coding Standards
 - Branch Naming
 - Commit Messages
 - Pull Request Process
 - Testing
+- Docker Compose Quick Commands
+- Troubleshooting Quick Checks
 - Code Review Checklist
 
 ---
@@ -43,6 +47,50 @@ docker compose up -d postgres keycloak
 mvn clean compile -DskipTests
 mvn test
 ```
+
+---
+
+## Local Run Modes
+
+Use one of the following contributor-friendly run modes.
+
+### Option A: Local app process via Maven
+
+```pwsh
+Set-Location <repo-root>
+docker compose up -d postgres keycloak
+mvn spring-boot:run
+```
+
+### Option B: Full stack via Docker Compose
+
+```pwsh
+Set-Location <repo-root>
+docker compose up -d --build
+```
+
+### Option C: Run packaged JAR
+
+```pwsh
+Set-Location <repo-root>
+mvn verify
+java -jar target/jwt-demo-reactive-0.0.1-SNAPSHOT.jar
+```
+
+---
+
+## Post-start Smoke Checks
+
+After startup, verify baseline endpoints:
+
+```pwsh
+Invoke-WebRequest http://localhost:8081/actuator/health
+Invoke-WebRequest http://localhost:8081/swagger-ui.html
+Invoke-WebRequest http://localhost:8081/v3/api-docs
+Invoke-WebRequest http://localhost:8081/actuator/prometheus
+```
+
+Expected result: HTTP `200` for all commands above.
 
 ---
 
@@ -176,6 +224,45 @@ mvn verify
 mvn -Dtest=KeycloakAuthServiceTest test
 mvn -DskipTests=false "-Dit.test=RequestWorkerMultiInstanceIT" verify
 ```
+
+---
+
+## Docker Compose Quick Commands
+
+```pwsh
+docker compose up -d
+docker compose down
+docker compose logs -f
+docker compose up -d <service_name>
+docker compose restart <service_name>
+docker compose down -v
+```
+
+---
+
+## Troubleshooting Quick Checks
+
+### Keycloak connectivity issues
+
+```pwsh
+docker compose ps keycloak
+docker compose logs keycloak
+Invoke-WebRequest http://localhost:8080
+```
+
+### Database connectivity issues
+
+```pwsh
+docker compose ps postgres
+docker compose logs postgres
+```
+
+Also verify DB/keycloak-related values in `.env`.
+
+### Unexpected rate limiting in local runs
+
+- Check current `app.rate-limit.rules[*]` in `application.properties`.
+- Restart the app to reset in-memory rate-limit buckets.
 
 ---
 
