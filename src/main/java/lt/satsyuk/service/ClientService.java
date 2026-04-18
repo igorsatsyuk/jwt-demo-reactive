@@ -13,7 +13,6 @@ import lt.satsyuk.repository.ClientRepository;
 import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -40,7 +39,7 @@ public class ClientService {
         Client client = mapper.toEntity(req);
         return repo.save(client)
                 .onErrorMap(this::isPhoneUniqueViolation,
-                        ex -> new PhoneAlreadyExistsException(req.phone()))
+                        _ -> new PhoneAlreadyExistsException(req.phone()))
                 .flatMap(saved -> {
                     Account account = Account.builder()
                             .clientId(saved.getId())
@@ -109,7 +108,7 @@ public class ClientService {
         try {
             Method method = target.getClass().getMethod(getterName);
             return method.invoke(target);
-        } catch (Exception ex) {
+        } catch (Exception _) {
             return null;
         }
     }
