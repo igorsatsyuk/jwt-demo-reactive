@@ -225,6 +225,16 @@ mvn -Dtest=KeycloakAuthServiceTest test
 mvn -DskipTests=false "-Dit.test=RequestWorkerMultiInstanceIT" verify
 ```
 
+### Optional Perf Smoke (for perf-related changes)
+
+For quick before/after checks without full load-testing stack:
+
+```pwsh
+pwsh ./ops/perf/perf-smoke.ps1 -BaseUrl http://localhost:8081 -Requests 50
+```
+
+See `ops/perf/README.md` for baseline comparison flow.
+
 ---
 
 ## Docker Compose Quick Commands

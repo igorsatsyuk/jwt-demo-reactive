@@ -15,6 +15,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Full API reference with endpoint matrix, roles, error envelope examples, i18n behavior, and actuator/rate-limit sections.
 - Security policy documenting reactive filter-chain boundaries, DPoP enforcement triggers, and incident correlation headers.
 - Contribution guide for reactive coding constraints, async worker change protocol, and integration-test patterns.
+- Lightweight perf smoke toolkit:
+  - `ops/perf/perf-smoke.ps1` to run `POST /api/auth/login` load and capture `/actuator/prometheus` metrics before/after
+  - `ops/perf/README.md` with baseline workflow and report interpretation
 
 ### Changed
 - `README.md` now includes a dedicated `Documentation` section with direct links to `API.md`, `SECURITY.md`, `CONTRIBUTING.md`, and `CHANGELOG.md`.
