@@ -125,17 +125,13 @@ class ClientServiceTest {
 
         Client c1 = Client.builder().id(1L).firstName("Anna").lastName("Smith").phone("+37060000004").build();
         Client c2 = Client.builder().id(2L).firstName("Bob").lastName("Smith").phone("+37060000005").build();
-        Client c3 = Client.builder().id(3L).firstName("Carl").lastName("Smith").phone("+37060000006").build();
 
         ClientResponse r1 = new ClientResponse(1L, "Anna", "Smith", "+37060000004");
         ClientResponse r2 = new ClientResponse(2L, "Bob", "Smith", "+37060000005");
-        ClientResponse r3 = new ClientResponse(3L, "Carl", "Smith", "+37060000006");
 
-        when(clientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCaseOrderByIdAsc("Smith", "Smith"))
-                .thenReturn(Flux.just(c1, c2, c3));
+        when(clientRepository.searchByNameOrSurname("Smith", 2)).thenReturn(Flux.just(c1, c2));
         when(clientMapper.toResponse(c1)).thenReturn(r1);
         when(clientMapper.toResponse(c2)).thenReturn(r2);
-        when(clientMapper.toResponse(c3)).thenReturn(r3);
 
         StepVerifier.create(clientService.searchByNameOrSurname("  Smith  "))
                 .assertNext(result -> assertThat(result).isEqualTo(List.of(r1, r2)))

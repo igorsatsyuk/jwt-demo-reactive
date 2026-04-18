@@ -2,16 +2,20 @@ package lt.satsyuk.config;
 
 import lt.satsyuk.auth.JsonAccessDeniedHandler;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
+import lt.satsyuk.security.CachingReactiveOpaqueTokenIntrospector;
 import lt.satsyuk.security.DpopAwareServerBearerTokenAuthenticationConverter;
 import lt.satsyuk.security.KeycloakOpaqueRoleConverter;
 import lt.satsyuk.security.KeycloakReactiveOpaqueTokenIntrospector;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.server.resource.introspection.ReactiveOpaqueTokenIntrospector;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+
+import java.time.Duration;
 
 @Configuration
 @EnableReactiveMethodSecurity
@@ -52,13 +56,17 @@ public class SecurityConfig {
 
     @Bean
     public ReactiveOpaqueTokenIntrospector reactiveOpaqueTokenIntrospector(KeycloakProperties props,
-                                                                           KeycloakOpaqueRoleConverter roleConverter) {
-        return new KeycloakReactiveOpaqueTokenIntrospector(
+                                                                           KeycloakOpaqueRoleConverter roleConverter,
+                                                                           @Value("${security.opaque-token.cache.enabled:true}") boolean cacheEnabled,
+                                                                           @Value("${security.opaque-token.cache.ttl:10s}") Duration cacheTtl,
+                                                                           @Value("${security.opaque-token.cache.max-size:10000}") long cacheMaxSize) {
+        ReactiveOpaqueTokenIntrospector delegate = new KeycloakReactiveOpaqueTokenIntrospector(
                 props.getIntrospectionUrl(),
                 props.getResourceClientId(),
                 props.getResourceClientSecret(),
                 roleConverter
         );
+        return new CachingReactiveOpaqueTokenIntrospector(delegate, cacheEnabled, cacheTtl, cacheMaxSize);
     }
 
     @Bean

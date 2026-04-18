@@ -65,12 +65,8 @@ public class ClientService {
             return Mono.error(new ClientSearchQueryTooShortException(MIN_SEARCH_QUERY_LENGTH));
         }
 
-        return repo.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCaseOrderByIdAsc(
-                        normalizedQuery,
-                        normalizedQuery
-                )
+        return repo.searchByNameOrSurname(normalizedQuery, searchMaxResults)
                 .map(mapper::toResponse)
-                .take(searchMaxResults)
                 .collectList();
     }
 }

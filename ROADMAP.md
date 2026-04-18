@@ -26,6 +26,12 @@
 - [x] Дополнительные проверки валидации и сообщений ошибок для account/request API
 - [x] Финализировать API docs (Swagger/OpenAPI)
 - [ ] Performance: оптимизация запросов и оценка кэширования
+  - [x] SQL: перенести limit поиска клиентов в SQL (без post-fetch `take`)
+  - [x] Security: добавить кэш интроспекции opaque token (TTL + max-size)
+  - [ ] DB: убрать лишние round-trip в create-пути клиента (`existsByPhone` -> upsert/insert-first стратегия)
+  - [ ] Worker: сократить reclaim-запросы (объединение метрик/апдейта, где возможно)
+  - [ ] DB: добавить индекс под claim-путь request worker (`status`, `type`, `created_at`)
+  - [ ] Observability: добавить базовый perf smoke сценарий и метрики сравнения до/после
 
 ## Low
 
