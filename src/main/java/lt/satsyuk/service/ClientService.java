@@ -18,8 +18,10 @@ import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
-import java.util.Set;
+import java.util.Locale;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +29,7 @@ public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
+    private static final Pattern CONSTRAINT_NAME_SPLITTER = Pattern.compile("[^a-z0-9_]+");
     private static final Set<String> PHONE_UNIQUE_CONSTRAINTS = Set.of(
             "uq_client_phone",
             "client_phone_key"
@@ -87,16 +90,21 @@ public class ClientService {
         if (constraintName == null) {
             return false;
         }
-        return PHONE_UNIQUE_CONSTRAINTS.stream()
-                .anyMatch(knownConstraint -> knownConstraint.equalsIgnoreCase(constraintName));
+        return PHONE_UNIQUE_CONSTRAINTS.contains(constraintName.toLowerCase(Locale.ROOT));
     }
 
     private boolean containsPhoneConstraintName(String message) {
         if (message == null) {
             return false;
         }
-        return PHONE_UNIQUE_CONSTRAINTS.stream()
-                .anyMatch(message::contains);
+        String normalizedMessage = message.toLowerCase(Locale.ROOT);
+        String[] tokens = CONSTRAINT_NAME_SPLITTER.split(normalizedMessage);
+        for (String token : tokens) {
+            if (PHONE_UNIQUE_CONSTRAINTS.contains(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String extractConstraintName(Throwable throwable) {
