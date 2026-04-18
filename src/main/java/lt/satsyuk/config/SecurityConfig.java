@@ -2,6 +2,7 @@ package lt.satsyuk.config;
 
 import lt.satsyuk.auth.JsonAccessDeniedHandler;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
+import lt.satsyuk.security.CachingReactiveOpaqueTokenIntrospector;
 import lt.satsyuk.security.DpopAwareServerBearerTokenAuthenticationConverter;
 import lt.satsyuk.security.KeycloakOpaqueRoleConverter;
 import lt.satsyuk.security.KeycloakReactiveOpaqueTokenIntrospector;
@@ -15,7 +16,7 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 
 @Configuration
 @EnableReactiveMethodSecurity
-@EnableConfigurationProperties({RateLimitProperties.class, DpopProperties.class})
+@EnableConfigurationProperties({RateLimitProperties.class, DpopProperties.class, OpaqueTokenCacheProperties.class})
 public class SecurityConfig {
 
     @Bean
@@ -52,12 +53,19 @@ public class SecurityConfig {
 
     @Bean
     public ReactiveOpaqueTokenIntrospector reactiveOpaqueTokenIntrospector(KeycloakProperties props,
-                                                                           KeycloakOpaqueRoleConverter roleConverter) {
-        return new KeycloakReactiveOpaqueTokenIntrospector(
+                                                                           KeycloakOpaqueRoleConverter roleConverter,
+                                                                           OpaqueTokenCacheProperties cacheProperties) {
+        ReactiveOpaqueTokenIntrospector delegate = new KeycloakReactiveOpaqueTokenIntrospector(
                 props.getIntrospectionUrl(),
                 props.getResourceClientId(),
                 props.getResourceClientSecret(),
                 roleConverter
+        );
+        return new CachingReactiveOpaqueTokenIntrospector(
+                delegate,
+                cacheProperties.isEnabled(),
+                cacheProperties.getTtl(),
+                cacheProperties.getMaxSize()
         );
     }
 
