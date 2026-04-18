@@ -1,12 +1,14 @@
+#Requires -Version 7.0
+
 param(
     [string]$BaseUrl = "http://localhost:8081",
     [int]$Requests = 50,
     [int]$WarmupRequests = 5,
     [int]$RequestTimeoutSec = 10,
-    [string]$Username = "user",
-    [string]$Password = "password",
-    [string]$ClientId = "spring-app",
-    [string]$ClientSecret = "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab",
+    [string]$Username = $env:PERF_SMOKE_USERNAME,
+    [string]$Password = $env:PERF_SMOKE_PASSWORD,
+    [string]$ClientId = $env:PERF_SMOKE_CLIENT_ID,
+    [string]$ClientSecret = $env:PERF_SMOKE_CLIENT_SECRET,
     [string]$OutputDir = "target/perf",
     [string]$BaselineSummary = "",
     [switch]$Insecure
@@ -317,6 +319,23 @@ if ($Requests -le 0) {
 if ($WarmupRequests -lt 0) {
     throw "WarmupRequests must be >= 0."
 }
+if ([string]::IsNullOrWhiteSpace($ClientId)) {
+    $ClientId = "spring-app"
+}
+
+$missingCredentials = New-Object System.Collections.Generic.List[string]
+if ([string]::IsNullOrWhiteSpace($Username)) {
+    [void]$missingCredentials.Add("Username")
+}
+if ([string]::IsNullOrWhiteSpace($Password)) {
+    [void]$missingCredentials.Add("Password")
+}
+if ([string]::IsNullOrWhiteSpace($ClientSecret)) {
+    [void]$missingCredentials.Add("ClientSecret")
+}
+if ($missingCredentials.Count -gt 0) {
+    throw "Missing required credentials: $($missingCredentials -join ', '). Provide parameters or PERF_SMOKE_USERNAME/PERF_SMOKE_PASSWORD/PERF_SMOKE_CLIENT_SECRET env vars."
+}
 
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -331,11 +350,6 @@ $loginBody = @{
     clientSecret = $ClientSecret
 } | ConvertTo-Json -Compress
 
-Write-Host "Collecting baseline metrics from $prometheusUrl ..."
-$beforeMetricsText = Get-ActuatorPrometheusText -Url $prometheusUrl
-$beforeSamples = Get-PrometheusSamples -PrometheusText $beforeMetricsText
-$beforeSnapshot = Get-MetricSnapshot -Samples $beforeSamples
-
 if ($WarmupRequests -gt 0) {
     Write-Host "Warmup: $WarmupRequests requests"
     for ($i = 1; $i -le $WarmupRequests; $i++) {
@@ -347,6 +361,11 @@ if ($WarmupRequests -gt 0) {
         }
     }
 }
+
+Write-Host "Collecting scenario baseline metrics from $prometheusUrl ..."
+$beforeMetricsText = Get-ActuatorPrometheusText -Url $prometheusUrl
+$beforeSamples = Get-PrometheusSamples -PrometheusText $beforeMetricsText
+$beforeSnapshot = Get-MetricSnapshot -Samples $beforeSamples
 
 Write-Host "Executing smoke scenario: $Requests requests to $loginUrl ..."
 $latencies = New-Object System.Collections.Generic.List[double]

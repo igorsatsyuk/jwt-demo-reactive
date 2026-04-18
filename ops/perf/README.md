@@ -7,25 +7,39 @@ This folder contains a lightweight smoke scenario for quick performance checks a
 Use one command to:
 
 1. Execute a basic load scenario (`POST /api/auth/login`).
-2. Capture selected server metrics from `/actuator/prometheus` before and after the run.
-3. Save machine-readable output (`.json`) and human-readable report (`.md`).
-4. Optionally compare current run against a baseline summary.
+2. Run warmup first (if configured), then capture baseline metrics.
+3. Capture selected server metrics from `/actuator/prometheus` before and after the scenario run.
+4. Save machine-readable output (`.json`) and human-readable report (`.md`).
+5. Optionally compare current run against a baseline summary.
 
 ## Prerequisites
 
 - App is running (default: `http://localhost:8081`)
 - Keycloak is available
 - Endpoint `/actuator/prometheus` is reachable
+- PowerShell 7+ (`pwsh`)
 
 ## Run smoke scenario
+
+Set credentials via env vars (recommended):
+
+```pwsh
+$env:PERF_SMOKE_USERNAME = "user"
+$env:PERF_SMOKE_PASSWORD = "<password>"
+$env:PERF_SMOKE_CLIENT_SECRET = "<client-secret>"
+```
+
+Optional:
+- `PERF_SMOKE_CLIENT_ID` (defaults to `spring-app`)
+
+Then run:
 
 ```pwsh
 pwsh ./ops/perf/perf-smoke.ps1 `
   -BaseUrl http://localhost:8081 `
   -Requests 50 `
   -WarmupRequests 5 `
-  -ClientId spring-app `
-  -ClientSecret "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab"
+  -ClientId spring-app
 ```
 
 Outputs are written to `target/perf`:
