@@ -2,6 +2,13 @@
 
 Reactive OAuth2 proxy/service built with Spring Boot 4 + Java 25, using WebFlux, R2DBC, Keycloak, and OTLP-first observability.
 
+## Documentation
+
+- `API.md` - endpoint reference and response/error contract
+- `SECURITY.md` - security policy and runtime security model
+- `CONTRIBUTING.md` - contribution workflow and coding/testing standards
+- `CHANGELOG.md` - notable project changes
+
 This project keeps the same business scenarios as `jwt-demo`, but the implementation is fully reactive:
 - WebFlux controllers (`Mono<AppResponse<...>>`)
 - R2DBC + PostgreSQL persistence
@@ -457,3 +464,4 @@ Main integration suites:
 - This is the fastest path to diagnose `401`, `403`, and `429` scenarios across API + security filters.
 
 ---
+
