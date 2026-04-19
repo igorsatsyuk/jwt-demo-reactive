@@ -1,5 +1,6 @@
 package lt.satsyuk.security;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.config.DpopProperties;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import reactor.test.StepVerifier;
 import java.time.Instant;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -33,8 +35,9 @@ class DpopAuthenticationWebFilterTest {
     private final DpopProperties properties = new DpopProperties();
     private final DpopProofValidator validator = mock(DpopProofValidator.class);
     private final JsonAuthEntryPoint authEntryPoint = mock(JsonAuthEntryPoint.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-    private final DpopAuthenticationWebFilter filter = new DpopAuthenticationWebFilter(properties, validator, authEntryPoint);
+    private final DpopAuthenticationWebFilter filter = new DpopAuthenticationWebFilter(properties, validator, authEntryPoint, meterRegistry);
 
     @Test
     void filter_skipsValidationWhenDpopDisabled() {
@@ -93,6 +96,9 @@ class DpopAuthenticationWebFilterTest {
 
         verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
         verify(chain, never()).filter(exchange);
+        assertThat(
+                meterRegistry.counter("security.dpop.rejected", "reason", "scheme_required").count()
+        ).isEqualTo(1.0d);
     }
 
     @Test
@@ -109,6 +115,9 @@ class DpopAuthenticationWebFilterTest {
 
         verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
         verify(chain, never()).filter(exchange);
+        assertThat(
+                meterRegistry.counter("security.dpop.rejected", "reason", "proof_missing").count()
+        ).isEqualTo(1.0d);
     }
 
     @Test
@@ -145,6 +154,9 @@ class DpopAuthenticationWebFilterTest {
 
         verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
         verify(chain, never()).filter(exchange);
+        assertThat(
+                meterRegistry.counter("security.dpop.rejected", "reason", "validation_failed").count()
+        ).isEqualTo(1.0d);
     }
 
     @Test

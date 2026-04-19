@@ -5,59 +5,58 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class JsonAccessDeniedHandlerTest {
+class JsonAuthEntryPointTest {
 
     @Test
-    void handle_writesForbiddenJsonPayload() {
+    void commence_writesUnauthorizedJsonPayload() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        JsonAccessDeniedHandler handler = new JsonAccessDeniedHandler(new ObjectMapper(), meterRegistry);
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/secure").build());
+        JsonAuthEntryPoint entryPoint = new JsonAuthEntryPoint(new ObjectMapper(), meterRegistry);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/accounts/client/1").build());
 
-        handler.handle(exchange, new AccessDeniedException("denied")).block();
+        entryPoint.commence(exchange, new InsufficientAuthenticationException("unauthorized")).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isNotNull();
-        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(403);
+        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(401);
         assertThat(exchange.getResponse().getHeaders().getContentType()).isNotNull().hasToString("application/json");
 
         String body = exchange.getResponse().getBodyAsString().block();
-        assertThat(body).contains("\"code\":40301", "\"message\":\"Forbidden\"");
+        assertThat(body).contains("\"code\":40101", "\"message\":\"Unauthorized\"");
         assertThat(meterRegistry.counter(
                 "security.http.responses",
                 "status",
-                "403",
+                "401",
                 "endpoint_group",
-                "other"
+                "accounts"
         ).count()).isEqualTo(1.0d);
     }
 
     @Test
-    void handle_completesResponseWhenSerializationFails() throws Exception {
+    void commence_completesResponseWhenSerializationFails() throws Exception {
         ObjectMapper objectMapper = mock(ObjectMapper.class);
         when(objectMapper.writeValueAsBytes(any())).thenThrow(new RuntimeException("boom"));
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-        JsonAccessDeniedHandler handler = new JsonAccessDeniedHandler(objectMapper, meterRegistry);
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/secure").build());
+        JsonAuthEntryPoint entryPoint = new JsonAuthEntryPoint(objectMapper, meterRegistry);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/clients/1").build());
 
-        handler.handle(exchange, new AccessDeniedException("denied")).block();
+        entryPoint.commence(exchange, new InsufficientAuthenticationException("unauthorized")).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isNotNull();
-        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(403);
+        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(401);
         assertThat(exchange.getResponse().getBodyAsString().block()).isEmpty();
         assertThat(meterRegistry.counter(
                 "security.http.responses",
                 "status",
-                "403",
+                "401",
                 "endpoint_group",
-                "other"
+                "clients"
         ).count()).isEqualTo(1.0d);
     }
 }
-

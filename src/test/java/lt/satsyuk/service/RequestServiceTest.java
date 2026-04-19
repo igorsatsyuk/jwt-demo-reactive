@@ -39,13 +39,14 @@ class RequestServiceTest {
     private final RequestRepository requestRepository = mock(RequestRepository.class);
     private final ClientService clientService = mock(ClientService.class);
     private final MessageService messageService = mock(MessageService.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private final RequestService requestService = new RequestService(
             requestRepository,
             clientService,
             new ObjectMapper(),
             messageService,
-            new SimpleMeterRegistry()
+            meterRegistry
     );
 
     @Test
@@ -147,6 +148,8 @@ class RequestServiceTest {
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).markCompleted(any(), anyString(), any());
         verify(requestRepository, never()).markFailed(any(), anyString(), any());
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isEqualTo(1L);
     }
 
     @Test
@@ -166,6 +169,8 @@ class RequestServiceTest {
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).markFailed(any(), anyString(), any());
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isEqualTo(1L);
     }
 
     @Test
@@ -270,6 +275,8 @@ class RequestServiceTest {
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).reclaimStaleClientCreateRequests(any(), any());
+        assertThat(meterRegistry.counter("request.worker.reclaimed_count").count()).isEqualTo(2.0d);
+        assertThat(meterRegistry.summary("request.worker.stale_processing_age").count()).isEqualTo(1L);
     }
 
     @Test
@@ -330,6 +337,7 @@ class RequestServiceTest {
 
         assertThat(workerRunning.get()).isFalse();
         verify(requestRepository).claimPendingClientCreateBatch(any(Integer.class), any());
+        assertThat(meterRegistry.summary("request.worker.claim_batch_size").count()).isEqualTo(1L);
     }
 
     @Test

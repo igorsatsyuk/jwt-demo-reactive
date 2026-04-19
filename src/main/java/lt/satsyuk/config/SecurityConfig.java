@@ -1,5 +1,6 @@
 package lt.satsyuk.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lt.satsyuk.auth.JsonAccessDeniedHandler;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.security.CachingReactiveOpaqueTokenIntrospector;
@@ -54,7 +55,8 @@ public class SecurityConfig {
     @Bean
     public ReactiveOpaqueTokenIntrospector reactiveOpaqueTokenIntrospector(KeycloakProperties props,
                                                                            KeycloakOpaqueRoleConverter roleConverter,
-                                                                           OpaqueTokenCacheProperties cacheProperties) {
+                                                                           OpaqueTokenCacheProperties cacheProperties,
+                                                                           MeterRegistry meterRegistry) {
         ReactiveOpaqueTokenIntrospector delegate = new KeycloakReactiveOpaqueTokenIntrospector(
                 props.getIntrospectionUrl(),
                 props.getResourceClientId(),
@@ -65,7 +67,8 @@ public class SecurityConfig {
                 delegate,
                 cacheProperties.isEnabled(),
                 cacheProperties.getTtl(),
-                cacheProperties.getMaxSize()
+                cacheProperties.getMaxSize(),
+                meterRegistry
         );
     }
 

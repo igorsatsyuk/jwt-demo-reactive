@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lt.satsyuk.config.RateLimitProperties;
 import lt.satsyuk.dto.AppResponse;
@@ -43,6 +44,7 @@ public class RateLimitingWebFilter implements WebFilter {
     private final RateLimitProperties rateLimitProperties;
     private final CacheManager cacheManager;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override
@@ -65,9 +67,13 @@ public class RateLimitingWebFilter implements WebFilter {
                                        String path,
                                        Authentication auth) {
         for (RateLimitProperties.Rule rule : sortedRules()) {
-            boolean shouldLimit = matchesRequest(rule, method, path)
-                    && matchesClient(rule, auth)
-                    && isRateLimited(rule, resolveKey(rule, exchange, auth));
+            if (!matchesRequest(rule, method, path) || !matchesClient(rule, auth)) {
+                continue;
+            }
+
+            String key = resolveKey(rule, exchange, auth);
+            boolean shouldLimit = isRateLimited(rule, key);
+            recordRateLimitDecision(rule, shouldLimit ? "rejected" : "allowed");
 
             if (shouldLimit) {
                 return writeRateLimitedResponse(exchange);
@@ -167,6 +173,21 @@ public class RateLimitingWebFilter implements WebFilter {
 
     private String safeValue(String value) {
         return StringUtils.hasText(value) ? value : "unknown";
+    }
+
+    private void recordRateLimitDecision(RateLimitProperties.Rule rule, String decision) {
+        String strategy = rule.getKeyStrategy() != null
+                ? rule.getKeyStrategy().name().toLowerCase(Locale.ROOT)
+                : "unknown";
+        meterRegistry.counter(
+                "security.rate_limit.decisions",
+                "rule_id",
+                safeValue(rule.getId()),
+                "key_strategy",
+                strategy,
+                "decision",
+                decision
+        ).increment();
     }
 
     public void clearBuckets() {

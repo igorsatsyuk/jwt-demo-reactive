@@ -1,5 +1,6 @@
 package lt.satsyuk.security;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
@@ -29,10 +30,12 @@ public class DpopAuthenticationWebFilter implements WebFilter {
     private static final String DPOP_SCHEME = "DPoP ";
     private static final String CNF = "cnf";
     private static final String JKT = "jkt";
+    private static final String DPOP_REJECTED_METRIC = "security.dpop.rejected";
 
     private final DpopProperties properties;
     private final DpopProofValidator validator;
     private final JsonAuthEntryPoint authEntryPoint;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -64,10 +67,12 @@ public class DpopAuthenticationWebFilter implements WebFilter {
         }
 
         if (!usesDpopScheme) {
+            recordDpopRejected("scheme_required");
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP authorization scheme is required"));
         }
 
         if (!StringUtils.hasText(dpopProof)) {
+            recordDpopRejected("proof_missing");
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP proof is required"));
         }
 
@@ -80,8 +85,45 @@ public class DpopAuthenticationWebFilter implements WebFilter {
             return chain.filter(exchange);
         } catch (DpopProofValidationException ex) {
             log.warn("DPoP validation failed: {}", ex.getMessage());
+            recordDpopRejected(mapDpopRejectReason(ex.getMessage()));
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException(ex.getMessage()));
         }
+    }
+
+    private void recordDpopRejected(String reason) {
+        meterRegistry.counter(DPOP_REJECTED_METRIC, "reason", reason).increment();
+    }
+
+    private String mapDpopRejectReason(String message) {
+        if (!StringUtils.hasText(message)) {
+            return "validation_failed";
+        }
+
+        return switch (message) {
+            case "DPoP proof header is missing", "DPoP proof is required" -> "proof_missing";
+            case "DPoP authorization scheme is required" -> "scheme_required";
+            case "Access token is missing for DPoP validation" -> "access_token_missing";
+            case "Invalid DPoP proof format" -> "proof_format_invalid";
+            case "Invalid DPoP proof type" -> "proof_type_invalid";
+            case "Invalid DPoP proof algorithm" -> "proof_algorithm_invalid";
+            case "DPoP proof JWK is missing" -> "jwk_missing";
+            case "DPoP proof public JWK is missing" -> "public_jwk_missing";
+            case "Invalid DPoP proof signature" -> "signature_invalid";
+            case "Unable to verify DPoP proof signature" -> "signature_verification_failed";
+            case "DPoP proof method mismatch" -> "method_mismatch";
+            case "DPoP proof URI is missing" -> "uri_missing";
+            case "DPoP proof URI mismatch" -> "uri_mismatch";
+            case "DPoP proof issue time is missing" -> "iat_missing";
+            case "DPoP proof is expired or issued in the future" -> "iat_out_of_range";
+            case "DPoP proof ID is missing" -> "jti_missing";
+            case "DPoP proof replay detected" -> "replay_detected";
+            case "DPoP proof access token hash is missing" -> "ath_missing";
+            case "DPoP proof access token hash mismatch" -> "ath_mismatch";
+            case "DPoP proof key thumbprint mismatch" -> "jkt_mismatch";
+            case "Unable to compute DPoP proof key thumbprint" -> "jkt_compute_failed";
+            case "Invalid DPoP proof claims" -> "claims_invalid";
+            default -> "validation_failed";
+        };
     }
 
     private boolean usesDpopScheme(ServerWebExchange exchange) {

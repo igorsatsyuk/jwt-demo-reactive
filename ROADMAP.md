@@ -1,9 +1,8 @@
 # ROADMAP
 
-Актуально на: **2026-04-18**
+Актуально на: **2026-04-19**
 
 Канонический список приоритетов для проекта `jwt-demo-reactive`.
-Все отчеты ссылаются на этот файл, чтобы избежать рассинхронизации.
 
 ## High
 
@@ -35,7 +34,13 @@
 
 ## Low
 
-- [ ] Дополнительный мониторинг и кастомные метрики
+- [x] Дополнительный мониторинг и кастомные метрики
+  - [x] Согласовать перечень метрик и фиксировать только низкокардинальные теги (endpoint group, result, error type)
+  - [x] Добавить метрики по security-цепочке: `401/403`, DPoP reject reasons, opaque introspection cache hit/miss
+  - [x] Добавить метрики по rate limiting: `allowed/rejected` по `rule.id` и ключевой стратегии
+  - [x] Добавить метрики по async worker: claim lag, batch size, processing duration, terminal status (`COMPLETED/FAILED`)
+  - [x] Добавить тесты на публикацию ключевых метрик (unit + интеграционный smoke через `/actuator/prometheus`)
+  - [x] Обновить Grafana/alerting и документацию (README + runbook) с порогами и примерами запросов
 - [ ] Reactive streams optimization
 - [ ] GraphQL (опционально)
 
