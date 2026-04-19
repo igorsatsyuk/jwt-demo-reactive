@@ -38,8 +38,8 @@ Then run:
 ```pwsh
 pwsh ./ops/perf/perf-smoke.ps1 `
   -BaseUrl http://localhost:8081 `
-  -Requests 50 `
-  -WarmupRequests 5 `
+  -Requests 5 `
+  -WarmupRequests 0 `
   -ClientId spring-app
 ```
 
@@ -48,11 +48,15 @@ HTTPS example:
 ```pwsh
 pwsh ./ops/perf/perf-smoke.ps1 `
   -BaseUrl https://localhost:8081 `
-  -Requests 50 `
-  -WarmupRequests 5 `
+  -Requests 5 `
+  -WarmupRequests 0 `
   -ClientId spring-app `
   -Insecure
 ```
+
+Rate-limit note:
+- Default login rate limit is `5 requests / 60 seconds` per IP (`/api/auth/login`).
+- Keep `-Requests` within that window (for example `5` with `-WarmupRequests 0`) unless you temporarily increase/disable the login rate-limit rule.
 
 Outputs are written to `target/perf`:
 
@@ -67,7 +71,8 @@ Outputs are written to `target/perf`:
 ```pwsh
 pwsh ./ops/perf/perf-smoke.ps1 `
   -BaseUrl http://localhost:8081 `
-  -Requests 50 `
+  -Requests 5 `
+  -WarmupRequests 0 `
   -BaselineSummary target/perf/perf-smoke-20260418-120000.json
 ```
 
