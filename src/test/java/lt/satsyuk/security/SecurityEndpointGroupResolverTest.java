@@ -13,8 +13,11 @@ class SecurityEndpointGroupResolverTest {
         assertThat(SecurityEndpointGroupResolver.resolve("/api/auth")).isEqualTo("auth");
         assertThat(SecurityEndpointGroupResolver.resolve("/api/auth/login")).isEqualTo("auth");
         assertThat(SecurityEndpointGroupResolver.resolve("/api/clients/1")).isEqualTo("clients");
+        assertThat(SecurityEndpointGroupResolver.resolve("/api/clientsX")).isEqualTo("other");
         assertThat(SecurityEndpointGroupResolver.resolve("/api/requests/1")).isEqualTo("requests");
+        assertThat(SecurityEndpointGroupResolver.resolve("/api/requestsX")).isEqualTo("other");
         assertThat(SecurityEndpointGroupResolver.resolve("/api/accounts/client/1")).isEqualTo("accounts");
+        assertThat(SecurityEndpointGroupResolver.resolve("/api/accountsX")).isEqualTo("other");
         assertThat(SecurityEndpointGroupResolver.resolve("/actuator/prometheus")).isEqualTo("actuator");
         assertThat(SecurityEndpointGroupResolver.resolve("/swagger-ui/index.html")).isEqualTo("docs");
         assertThat(SecurityEndpointGroupResolver.resolve("/v3/api-docs")).isEqualTo("docs");

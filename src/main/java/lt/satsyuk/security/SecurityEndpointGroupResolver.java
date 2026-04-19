@@ -12,13 +12,13 @@ public final class SecurityEndpointGroupResolver {
         if (path.equals("/api/auth") || path.startsWith("/api/auth/")) {
             return "auth";
         }
-        if (path.startsWith("/api/clients")) {
+        if (path.equals("/api/clients") || path.startsWith("/api/clients/")) {
             return "clients";
         }
-        if (path.startsWith("/api/requests")) {
+        if (path.equals("/api/requests") || path.startsWith("/api/requests/")) {
             return "requests";
         }
-        if (path.startsWith("/api/accounts")) {
+        if (path.equals("/api/accounts") || path.startsWith("/api/accounts/")) {
             return "accounts";
         }
         if (path.startsWith("/actuator")) {

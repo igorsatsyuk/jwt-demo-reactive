@@ -176,9 +176,7 @@ public class RateLimitingWebFilter implements WebFilter {
     }
 
     private void recordRateLimitDecision(RateLimitProperties.Rule rule, String decision) {
-        String strategy = rule.getKeyStrategy() != null
-                ? rule.getKeyStrategy().name().toLowerCase(Locale.ROOT)
-                : "unknown";
+        String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
         meterRegistry.counter(
                 "security.rate_limit.decisions",
                 "rule_id",

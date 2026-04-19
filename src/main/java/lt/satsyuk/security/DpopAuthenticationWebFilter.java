@@ -19,6 +19,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -31,6 +32,19 @@ public class DpopAuthenticationWebFilter implements WebFilter {
     private static final String CNF = "cnf";
     private static final String JKT = "jkt";
     private static final String DPOP_REJECTED_METRIC = "security.dpop.rejected";
+    private static final String VALIDATION_FAILED_REASON = "validation_failed";
+    private static final List<ReasonMapping> REASON_MAPPINGS = List.of(
+            new ReasonMapping("uri_scheme_required", "URI scheme is required for DPoP validation"),
+            new ReasonMapping("replay_detected", "replay"),
+            new ReasonMapping("scheme_required", "scheme"),
+            new ReasonMapping("host_required", "host"),
+            new ReasonMapping("proof_missing", "proof is required", "header is missing"),
+            new ReasonMapping("uri_mismatch", "URI mismatch"),
+            new ReasonMapping("method_mismatch", "method mismatch"),
+            new ReasonMapping("jkt_mismatch", "thumbprint mismatch"),
+            new ReasonMapping("ath_mismatch", "access token hash mismatch"),
+            new ReasonMapping("iat_out_of_range", "expired", "issued in the future")
+    );
 
     private final DpopProperties properties;
     private final DpopProofValidator validator;
@@ -96,39 +110,25 @@ public class DpopAuthenticationWebFilter implements WebFilter {
 
     private String mapDpopRejectReason(String message) {
         if (!StringUtils.hasText(message)) {
-            return "validation_failed";
+            return VALIDATION_FAILED_REASON;
         }
-        if (message.contains("replay")) {
-            return "replay_detected";
+        for (ReasonMapping mapping : REASON_MAPPINGS) {
+            if (mapping.matches(message)) {
+                return mapping.reason();
+            }
         }
-        if (message.contains("URI scheme is required for DPoP validation")) {
-            return "uri_scheme_required";
+        return VALIDATION_FAILED_REASON;
+    }
+
+    private record ReasonMapping(String reason, String... markers) {
+        private boolean matches(String message) {
+            for (String marker : markers) {
+                if (message.contains(marker)) {
+                    return true;
+                }
+            }
+            return false;
         }
-        if (message.contains("scheme")) {
-            return "scheme_required";
-        }
-        if (message.contains("host")) {
-            return "host_required";
-        }
-        if (message.contains("proof is required") || message.contains("header is missing")) {
-            return "proof_missing";
-        }
-        if (message.contains("URI mismatch")) {
-            return "uri_mismatch";
-        }
-        if (message.contains("method mismatch")) {
-            return "method_mismatch";
-        }
-        if (message.contains("thumbprint mismatch")) {
-            return "jkt_mismatch";
-        }
-        if (message.contains("access token hash mismatch")) {
-            return "ath_mismatch";
-        }
-        if (message.contains("expired") || message.contains("issued in the future")) {
-            return "iat_out_of_range";
-        }
-        return "validation_failed";
     }
 
     private boolean usesDpopScheme(ServerWebExchange exchange) {

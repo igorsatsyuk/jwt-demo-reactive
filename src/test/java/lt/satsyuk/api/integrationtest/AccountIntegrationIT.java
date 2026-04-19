@@ -290,8 +290,6 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 sleepBackoff(attempt);
             }
         }
-
-        throw new IllegalStateException("Unexpected retry state for DB setup");
     }
 
     private boolean isTransientConnectionIssue(Throwable throwable) {

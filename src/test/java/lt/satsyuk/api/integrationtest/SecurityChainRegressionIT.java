@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,8 +64,6 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     @BeforeEach
     void beforeEach() {
         rateLimitingWebFilter.clearBuckets();
-        doNothing().when(dpopProofValidator)
-                .validate(anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -88,8 +85,6 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
     @Test
     void dpop_filter_validates_proof_once_for_single_protected_request() {
-        doNothing().when(dpopProofValidator)
-                .validate(anyString(), anyString(), anyString(), anyString(), anyString());
         stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
 
         webTestClient.get()
