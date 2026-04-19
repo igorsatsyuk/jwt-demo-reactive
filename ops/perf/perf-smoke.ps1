@@ -150,20 +150,19 @@ function Get-MetricSumValue {
     return $sum
 }
 
-function Get-LatencyPercentile {
+function Get-LatencyPercentileFromSorted {
     param(
-        [double[]]$Values,
+        [double[]]$SortedValues,
         [double]$Percentile
     )
 
-    if ($Values.Count -eq 0) {
+    if ($SortedValues.Count -eq 0) {
         return 0.0
     }
 
-    $sorted = $Values | Sort-Object
-    $rank = [Math]::Ceiling(($Percentile / 100.0) * $sorted.Count) - 1
-    $index = [Math]::Max(0, [Math]::Min([int]$rank, $sorted.Count - 1))
-    return [double]$sorted[$index]
+    $rank = [Math]::Ceiling(($Percentile / 100.0) * $SortedValues.Count) - 1
+    $index = [Math]::Max(0, [Math]::Min([int]$rank, $SortedValues.Count - 1))
+    return [double]$SortedValues[$index]
 }
 
 function Format-Number {
@@ -375,8 +374,9 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
 }
 
-$loginUrl = "$BaseUrl/api/auth/login"
-$prometheusUrl = "$BaseUrl/actuator/prometheus"
+$normalizedBaseUrl = $BaseUrl.TrimEnd('/')
+$loginUrl = "$normalizedBaseUrl/api/auth/login"
+$prometheusUrl = "$normalizedBaseUrl/actuator/prometheus"
 $loginBody = @{
     username = $Username
     password = $Password
@@ -436,14 +436,15 @@ $afterSnapshot = Get-MetricSnapshot -Samples $afterSamples
 $deltaSnapshot = Get-DiffSnapshot -Before $beforeSnapshot -After $afterSnapshot
 
 $latenciesArray = $latencies.ToArray()
+$sortedLatencies = [double[]]($latenciesArray | Sort-Object)
 $durationSeconds = [Math]::Max($scenarioStopwatch.Elapsed.TotalSeconds, 0.000001)
 $throughput = $Requests / $durationSeconds
 $avgLatencyMs = ($latenciesArray | Measure-Object -Average).Average
 $minLatencyMs = ($latenciesArray | Measure-Object -Minimum).Minimum
 $maxLatencyMs = ($latenciesArray | Measure-Object -Maximum).Maximum
-$p50LatencyMs = Get-LatencyPercentile -Values $latenciesArray -Percentile 50
-$p95LatencyMs = Get-LatencyPercentile -Values $latenciesArray -Percentile 95
-$p99LatencyMs = Get-LatencyPercentile -Values $latenciesArray -Percentile 99
+$p50LatencyMs = Get-LatencyPercentileFromSorted -SortedValues $sortedLatencies -Percentile 50
+$p95LatencyMs = Get-LatencyPercentileFromSorted -SortedValues $sortedLatencies -Percentile 95
+$p99LatencyMs = Get-LatencyPercentileFromSorted -SortedValues $sortedLatencies -Percentile 99
 
 $beforeCount = [double]$beforeSnapshot.login_http_requests_count
 $afterCount = [double]$afterSnapshot.login_http_requests_count
