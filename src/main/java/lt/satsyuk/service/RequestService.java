@@ -229,18 +229,24 @@ public class RequestService {
 
                     CreateClientRequest payload = readJson(request.getRequestData(), CreateClientRequest.class);
                     return clientService.create(payload)
-                            .flatMap(clientResponse -> markCompleted(requestId, clientResponse));
+                            .flatMap(clientResponse -> markCompleted(requestId, clientResponse, startedNanos));
                 })
-                .doOnSuccess(unused -> completedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos)))
                 .onErrorResume(ex -> markFailed(requestId, ex, startedNanos));
     }
 
     private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse) {
+        return markCompleted(requestId, clientResponse, -1L);
+    }
+
+    private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse, long startedNanos) {
         String responseJson = writeJson(AppResponse.ok(clientResponse));
         return requestRepository.markCompleted(requestId, responseJson, now())
                 .doOnNext(updated -> {
                     if (updated == 1) {
                         completedTerminalStatusCount.increment();
+                        if (startedNanos > 0L) {
+                            completedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos));
+                        }
                         log.info("Client creation request {} completed", requestId);
                     } else {
                         log.warn("Client creation request {} completion skipped because state changed", requestId);
@@ -258,10 +264,10 @@ public class RequestService {
         String errorJson = writeJson(errorPayload);
         return requestRepository.markFailed(requestId, errorJson, now())
                 .doOnNext(updated -> {
-                    if (startedNanos > 0L) {
-                        failedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos));
-                    }
                     if (updated == 1) {
+                        if (startedNanos > 0L) {
+                            failedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos));
+                        }
                         failedTerminalStatusCount.increment();
                         log.warn("Client creation request {} failed: {}", requestId, ex.getMessage());
                     } else {

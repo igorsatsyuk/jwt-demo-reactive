@@ -98,32 +98,34 @@ public class DpopAuthenticationWebFilter implements WebFilter {
         if (!StringUtils.hasText(message)) {
             return "validation_failed";
         }
-
-        return switch (message) {
-            case "DPoP proof header is missing", "DPoP proof is required" -> "proof_missing";
-            case "DPoP authorization scheme is required" -> "scheme_required";
-            case "Access token is missing for DPoP validation" -> "access_token_missing";
-            case "Invalid DPoP proof format" -> "proof_format_invalid";
-            case "Invalid DPoP proof type" -> "proof_type_invalid";
-            case "Invalid DPoP proof algorithm" -> "proof_algorithm_invalid";
-            case "DPoP proof JWK is missing" -> "jwk_missing";
-            case "DPoP proof public JWK is missing" -> "public_jwk_missing";
-            case "Invalid DPoP proof signature" -> "signature_invalid";
-            case "Unable to verify DPoP proof signature" -> "signature_verification_failed";
-            case "DPoP proof method mismatch" -> "method_mismatch";
-            case "DPoP proof URI is missing" -> "uri_missing";
-            case "DPoP proof URI mismatch" -> "uri_mismatch";
-            case "DPoP proof issue time is missing" -> "iat_missing";
-            case "DPoP proof is expired or issued in the future" -> "iat_out_of_range";
-            case "DPoP proof ID is missing" -> "jti_missing";
-            case "DPoP proof replay detected" -> "replay_detected";
-            case "DPoP proof access token hash is missing" -> "ath_missing";
-            case "DPoP proof access token hash mismatch" -> "ath_mismatch";
-            case "DPoP proof key thumbprint mismatch" -> "jkt_mismatch";
-            case "Unable to compute DPoP proof key thumbprint" -> "jkt_compute_failed";
-            case "Invalid DPoP proof claims" -> "claims_invalid";
-            default -> "validation_failed";
-        };
+        if (message.contains("replay")) {
+            return "replay_detected";
+        }
+        if (message.contains("scheme")) {
+            return "scheme_required";
+        }
+        if (message.contains("host")) {
+            return "host_required";
+        }
+        if (message.contains("proof is required") || message.contains("header is missing")) {
+            return "proof_missing";
+        }
+        if (message.contains("URI mismatch")) {
+            return "uri_mismatch";
+        }
+        if (message.contains("method mismatch")) {
+            return "method_mismatch";
+        }
+        if (message.contains("thumbprint mismatch")) {
+            return "jkt_mismatch";
+        }
+        if (message.contains("access token hash mismatch")) {
+            return "ath_mismatch";
+        }
+        if (message.contains("expired") || message.contains("issued in the future")) {
+            return "iat_out_of_range";
+        }
+        return "validation_failed";
     }
 
     private boolean usesDpopScheme(ServerWebExchange exchange) {

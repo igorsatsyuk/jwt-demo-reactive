@@ -190,9 +190,8 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
             }
 
             Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
-            if (persisted.getBalance().compareTo(expectedBalance) == 0) {
-                return;
-            }
+            assertThat(persisted.getBalance()).isEqualByComparingTo(expectedBalance);
+            return;
         }
 
         assertThat(account).isNotNull();

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lt.satsyuk.dto.AppResponse;
+import lt.satsyuk.security.SecurityEndpointGroupResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,7 +27,7 @@ public class JsonAccessDeniedHandler implements ServerAccessDeniedHandler {
                 "status",
                 "403",
                 "endpoint_group",
-                endpointGroup(exchange)
+                SecurityEndpointGroupResolver.resolve(exchange.getRequest().getPath().value())
         ).increment();
 
         var response = exchange.getResponse();
@@ -44,32 +45,6 @@ public class JsonAccessDeniedHandler implements ServerAccessDeniedHandler {
         } catch (Exception _) {
             return response.setComplete();
         }
-    }
-
-    private String endpointGroup(ServerWebExchange exchange) {
-        String path = exchange.getRequest().getPath().value();
-        if (path == null || path.isBlank()) {
-            return "unknown";
-        }
-        if (path.startsWith("/api/auth/")) {
-            return "auth";
-        }
-        if (path.startsWith("/api/clients")) {
-            return "clients";
-        }
-        if (path.startsWith("/api/requests")) {
-            return "requests";
-        }
-        if (path.startsWith("/api/accounts")) {
-            return "accounts";
-        }
-        if (path.startsWith("/actuator")) {
-            return "actuator";
-        }
-        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs")) {
-            return "docs";
-        }
-        return "other";
     }
 }
 

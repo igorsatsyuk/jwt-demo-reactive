@@ -25,6 +25,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -144,7 +145,7 @@ class DpopAuthenticationWebFilterTest {
         Authentication auth = jwtAuthWithoutCnf();
 
         when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-        org.mockito.Mockito.doThrow(new DpopProofValidationException("bad proof"))
+        doThrow(new DpopProofValidationException("bad proof"))
                 .when(validator)
                 .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null);
 
@@ -168,7 +169,7 @@ class DpopAuthenticationWebFilterTest {
         auth.setAuthenticated(true);
 
         when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-        org.mockito.Mockito.doThrow(new DpopProofValidationException("Access token is missing for DPoP validation"))
+        doThrow(new DpopProofValidationException("Access token is missing for DPoP validation"))
                 .when(validator)
                 .validate("GET", "https://api.example.com/resource", null, "proof", null);
 
@@ -177,6 +178,61 @@ class DpopAuthenticationWebFilterTest {
                 .verifyComplete();
 
         verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
+    }
+
+    @Test
+    void filter_recordsReplayDetectedReason() {
+        assertMappedReason("DPoP proof replay detected", "replay_detected");
+    }
+
+    @Test
+    void filter_recordsUriMismatchReason() {
+        assertMappedReason("DPoP proof URI mismatch", "uri_mismatch");
+    }
+
+    @Test
+    void filter_recordsMethodMismatchReason() {
+        assertMappedReason("DPoP proof method mismatch", "method_mismatch");
+    }
+
+    @Test
+    void filter_recordsJktMismatchReason() {
+        assertMappedReason("DPoP proof key thumbprint mismatch", "jkt_mismatch");
+    }
+
+    @Test
+    void filter_recordsAthMismatchReason() {
+        assertMappedReason("DPoP proof access token hash mismatch", "ath_mismatch");
+    }
+
+    @Test
+    void filter_recordsIatOutOfRangeReason() {
+        assertMappedReason("DPoP proof is expired or issued in the future", "iat_out_of_range");
+    }
+
+    @Test
+    void filter_recordsHostRequiredReason() {
+        assertMappedReason("URI host is required for DPoP validation", "host_required");
+    }
+
+    private void assertMappedReason(String validatorMessage, String expectedReason) {
+        properties.setEnabled(true);
+        WebFilterChain chain = mock(WebFilterChain.class);
+        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "DPoP jwt-token", "proof");
+        Authentication auth = jwtAuthWithoutCnf();
+
+        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
+        doThrow(new DpopProofValidationException(validatorMessage))
+                .when(validator)
+                .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null);
+
+        StepVerifier.create(filter.filter(exchange, chain)
+                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
+                .verifyComplete();
+
+        assertThat(meterRegistry.counter("security.dpop.rejected", "reason", expectedReason).count()).isEqualTo(1.0d);
+        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
+        verify(chain, never()).filter(exchange);
     }
 
     private static MockServerWebExchange exchange(HttpMethod method, String uri, String authorization, String dpopProof) {
