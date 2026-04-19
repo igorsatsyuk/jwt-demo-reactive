@@ -169,8 +169,8 @@ class RequestServiceTest {
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
         StepVerifier.create(result).verifyComplete();
-        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isEqualTo(0.0d);
-        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isEqualTo(0L);
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isZero();
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isZero();
     }
 
     @Test
@@ -210,8 +210,8 @@ class RequestServiceTest {
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
         StepVerifier.create(result).verifyComplete();
-        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isEqualTo(0.0d);
-        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isEqualTo(0L);
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isZero();
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isZero();
     }
 
     @Test
@@ -328,7 +328,8 @@ class RequestServiceTest {
                 requestService,
                 "markCompleted",
                 UUID.randomUUID(),
-                new ClientResponse(1L, "John", "Doe", "+37060000007")
+                new ClientResponse(1L, "John", "Doe", "+37060000007"),
+                -1L
         );
 
         StepVerifier.create(result).verifyComplete();
@@ -343,7 +344,8 @@ class RequestServiceTest {
                 requestService,
                 "markFailed",
                 UUID.randomUUID(),
-                new IllegalStateException("boom")
+                new IllegalStateException("boom"),
+                -1L
         );
 
         StepVerifier.create(result).verifyComplete();
@@ -397,7 +399,7 @@ class RequestServiceTest {
                 request
         );
 
-        assertThat(meterRegistry.summary("request.worker.claim_lag_seconds").count()).isEqualTo(0L);
+        assertThat(meterRegistry.summary("request.worker.claim_lag_seconds").count()).isZero();
     }
 
     @Test

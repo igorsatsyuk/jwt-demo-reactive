@@ -129,9 +129,10 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(metrics).isNotNull();
-        assertThat(metrics).contains("security_dpop_rejected_total");
-        assertThat(metrics).contains("reason=\"replay_detected\"");
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_dpop_rejected_total")
+                .contains("reason=\"replay_detected\"");
     }
 
     @Test
@@ -203,11 +204,12 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(metrics).isNotNull();
-        assertThat(metrics).contains("security_http_responses_total");
-        assertThat(metrics).contains("status=\"401\"");
-        assertThat(metrics).contains("status=\"403\"");
-        assertThat(metrics).contains("endpoint_group=\"accounts\"");
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_http_responses_total")
+                .contains("status=\"401\"")
+                .contains("status=\"403\"")
+                .contains("endpoint_group=\"accounts\"");
     }
 
     private void assertTraceAndRequestHeaders(EntityExchangeResult<?> result) {

@@ -278,7 +278,6 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     }
 
     private void withTransientDbRetry(Runnable operation) {
-        Throwable last = null;
         for (int attempt = 1; attempt <= DB_SETUP_MAX_ATTEMPTS; attempt++) {
             try {
                 operation.run();
@@ -287,14 +286,10 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 if (!isTransientConnectionIssue(ex) || attempt == DB_SETUP_MAX_ATTEMPTS) {
                     throw ex;
                 }
-                last = ex;
                 sleepBackoff(attempt);
             }
         }
 
-        if (last instanceof RuntimeException runtimeEx) {
-            throw runtimeEx;
-        }
         throw new IllegalStateException("Unexpected retry state for DB setup");
     }
 
@@ -305,9 +300,6 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                 return true;
             }
             if (current instanceof IOException) {
-                return true;
-            }
-            if (current instanceof java.net.SocketException) {
                 return true;
             }
 
@@ -328,7 +320,7 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
     private void sleepBackoff(int attempt) {
         try {
-            TimeUnit.MILLISECONDS.sleep(150L * attempt);
+            Thread.sleep(150L * attempt);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting to retry transient DB operation", interrupted);

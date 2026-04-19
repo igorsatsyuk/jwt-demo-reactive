@@ -234,10 +234,6 @@ public class RequestService {
                 .onErrorResume(ex -> markFailed(requestId, ex, startedNanos));
     }
 
-    private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse) {
-        return markCompleted(requestId, clientResponse, -1L);
-    }
-
     private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse, long startedNanos) {
         String responseJson = writeJson(AppResponse.ok(clientResponse));
         return requestRepository.markCompleted(requestId, responseJson, now())
@@ -255,9 +251,6 @@ public class RequestService {
                 .then();
     }
 
-    private Mono<Void> markFailed(UUID requestId, Throwable ex) {
-        return markFailed(requestId, ex, -1L);
-    }
 
     private Mono<Void> markFailed(UUID requestId, Throwable ex, long startedNanos) {
         AppResponse<Void> errorPayload = toWorkerError(ex);

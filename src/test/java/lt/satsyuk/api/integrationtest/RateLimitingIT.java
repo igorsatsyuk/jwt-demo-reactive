@@ -141,11 +141,12 @@ class RateLimitingIT extends WireMockIntegrationTest {
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(metrics).isNotNull();
-        assertThat(metrics).contains("security_rate_limit_decisions_total");
-        assertThat(metrics).contains("rule_id=\"login\"");
-        assertThat(metrics).contains("decision=\"allowed\"");
-        assertThat(metrics).contains("decision=\"rejected\"");
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_rate_limit_decisions_total")
+                .contains("rule_id=\"login\"")
+                .contains("decision=\"allowed\"")
+                .contains("decision=\"rejected\"");
     }
 
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec doLogin(String language) {
