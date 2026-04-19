@@ -115,14 +115,16 @@ public class RateLimitingWebFilter implements WebFilter {
 
     private CompiledRule compileRule(RateLimitProperties.Rule rule) {
         Set<String> normalizedMethods = normalizeMethods(rule.getMethods());
-        boolean matchAnyMethod = normalizedMethods.isEmpty() || normalizedMethods.contains("*");
+        boolean methodsUnrestricted = normalizedMethods.isEmpty();
+        boolean wildcardMethod = normalizedMethods.contains("*");
         Cache cache = cacheManager.getCache(resolveCacheName(rule));
         return new CompiledRule(
                 rule,
                 cache,
                 safeValue(rule.getId()),
                 rule.getKeyStrategy().name().toLowerCase(Locale.ROOT),
-                matchAnyMethod,
+                methodsUnrestricted,
+                wildcardMethod,
                 normalizedMethods
         );
     }
@@ -147,11 +149,14 @@ public class RateLimitingWebFilter implements WebFilter {
     }
 
     private boolean matchesMethod(CompiledRule rule, String method) {
-        if (rule.matchAnyMethod()) {
+        if (rule.methodsUnrestricted()) {
             return true;
         }
         if (!StringUtils.hasText(method)) {
             return false;
+        }
+        if (rule.wildcardMethod()) {
+            return true;
         }
 
         String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
@@ -292,7 +297,8 @@ public class RateLimitingWebFilter implements WebFilter {
                                 Cache cache,
                                 String ruleId,
                                 String strategyTag,
-                                boolean matchAnyMethod,
+                                boolean methodsUnrestricted,
+                                boolean wildcardMethod,
                                 Set<String> normalizedMethods) {
     }
 }

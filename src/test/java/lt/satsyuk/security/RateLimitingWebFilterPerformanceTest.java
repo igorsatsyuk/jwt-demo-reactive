@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lt.satsyuk.config.RateLimitProperties;
 import lt.satsyuk.service.MessageService;
 import lt.satsyuk.service.SecurityService;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
@@ -17,10 +18,12 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class RateLimitingWebFilterPerformanceTest {
 
+    @Disabled("Local microbenchmark only; excluded from regular CI test signal")
     @Test
     void benchmark_hotPath_allowedRequest() {
         RateLimitingWebFilter filter = buildFilter();
@@ -47,6 +50,9 @@ class RateLimitingWebFilterPerformanceTest {
                 elapsedNanos / 1_000_000d,
                 nsPerOp,
                 opsPerSec);
+
+        assertThat(nsPerOp).isPositive();
+        assertThat(opsPerSec).isPositive();
     }
 
     private void runLoop(RateLimitingWebFilter filter,
