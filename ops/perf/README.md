@@ -56,6 +56,7 @@ pwsh ./ops/perf/perf-smoke.ps1 `
 
 Rate-limit note:
 - Default login rate limit is `5 requests / 60 seconds` per IP (`/api/auth/login`).
+- Script defaults are rate-limit-safe: `-Requests 5` and `-WarmupRequests 0`.
 - Keep `-Requests` within that window (for example `5` with `-WarmupRequests 0`) unless you temporarily increase/disable the login rate-limit rule.
 
 Outputs are written to `target/perf`:

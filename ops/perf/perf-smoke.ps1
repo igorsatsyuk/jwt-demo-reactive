@@ -2,8 +2,8 @@
 
 param(
     [string]$BaseUrl = "http://localhost:8081",
-    [int]$Requests = 50,
-    [int]$WarmupRequests = 5,
+    [int]$Requests = 5,
+    [int]$WarmupRequests = 0,
     [int]$RequestTimeoutSec = 10,
     [string]$Username = $env:PERF_SMOKE_USERNAME,
     [string]$Password = $env:PERF_SMOKE_PASSWORD,
@@ -241,6 +241,34 @@ function Get-ObjectPropertyDouble {
     }
 }
 
+function Get-FirstObjectPropertyDouble {
+    param(
+        [object]$Object,
+        [string[]]$PropertyNames,
+        [double]$DefaultValue = 0.0
+    )
+
+    if ($null -eq $Object -or $null -eq $PropertyNames) {
+        return $DefaultValue
+    }
+
+    foreach ($propertyName in $PropertyNames) {
+        $prop = $Object.PSObject.Properties[$propertyName]
+        if ($null -eq $prop -or $null -eq $prop.Value) {
+            continue
+        }
+
+        try {
+            return [double]$prop.Value
+        }
+        catch {
+            continue
+        }
+    }
+
+    return $DefaultValue
+}
+
 function Get-ActuatorPrometheusText {
     param([string]$Url)
 
@@ -329,9 +357,7 @@ function Write-SmokeMarkdownReport {
     $lines.Add("")
     $lines.Add("| Metric | Value |")
     $lines.Add("|---|---:|")
-    $lines.Add("| login_http_avg_latency_before_ms | $(Format-Number -Value $Derived.login_http_avg_latency_before_ms -Scale 2) |")
-    $lines.Add("| login_http_avg_latency_after_ms | $(Format-Number -Value $Derived.login_http_avg_latency_after_ms -Scale 2) |")
-    $lines.Add("| login_http_avg_latency_delta_ms | $(Format-Number -Value $Derived.login_http_avg_latency_delta_ms -Scale 2) |")
+    $lines.Add("| login_http_avg_latency_scenario_ms | $(Format-Number -Value $Derived.login_http_avg_latency_scenario_ms -Scale 2) |")
     $lines.Add("| login_http_count_delta | $(Format-Number -Value $Derived.login_http_count_delta -Scale 0) |")
     $lines.Add("| auth_login_success_delta | $(Format-Number -Value $Derived.auth_login_success_delta -Scale 0) |")
     $lines.Add("| auth_login_failure_delta | $(Format-Number -Value $Derived.auth_login_failure_delta -Scale 0) |")
@@ -350,13 +376,21 @@ function Write-BaselineComparisonReport {
 
     $baselineThroughput = Get-ObjectPropertyDouble -Object $Baseline.client -PropertyName "throughputRps"
     $baselineP95 = if ($null -ne $Baseline.client) { Get-ObjectPropertyDouble -Object $Baseline.client.latency -PropertyName "p95Ms" } else { 0.0 }
-    $baselineServerAvg = if ($null -ne $Baseline.server) { Get-ObjectPropertyDouble -Object $Baseline.server.derived -PropertyName "login_http_avg_latency_after_ms" } else { 0.0 }
+    $baselineServerAvg = if ($null -ne $Baseline.server) {
+        Get-FirstObjectPropertyDouble -Object $Baseline.server.derived -PropertyNames @(
+                "login_http_avg_latency_scenario_ms",
+                "login_http_avg_latency_after_ms"
+        )
+    } else { 0.0 }
     $baselineSuccessDelta = if ($null -ne $Baseline.server) { Get-ObjectPropertyDouble -Object $Baseline.server.derived -PropertyName "auth_login_success_delta" } else { 0.0 }
     $baselineFailureDelta = if ($null -ne $Baseline.server) { Get-ObjectPropertyDouble -Object $Baseline.server.derived -PropertyName "auth_login_failure_delta" } else { 0.0 }
 
     $currentThroughput = [double]$Current.client.throughputRps
     $currentP95 = [double]$Current.client.latency.p95Ms
-    $currentServerAvg = [double]$Current.server.derived.login_http_avg_latency_after_ms
+    $currentServerAvg = Get-FirstObjectPropertyDouble -Object $Current.server.derived -PropertyNames @(
+            "login_http_avg_latency_scenario_ms",
+            "login_http_avg_latency_after_ms"
+    )
     $currentSuccessDelta = [double]$Current.server.derived.auth_login_success_delta
     $currentFailureDelta = [double]$Current.server.derived.auth_login_failure_delta
 
@@ -374,7 +408,7 @@ function Write-BaselineComparisonReport {
     $lines.Add("|---|---:|---:|---:|---:|")
     $lines.Add("| throughput_req_per_sec | $(Format-Number -Value $baselineThroughput -Scale 2) | $(Format-Number -Value $currentThroughput -Scale 2) | $(Format-Number -Value ($currentThroughput - $baselineThroughput) -Scale 2) | $(if ($null -eq $throughputPct) {'n/a'} else { (Format-Number -Value $throughputPct -Scale 2) + '%' }) |")
     $lines.Add("| client_latency_p95_ms | $(Format-Number -Value $baselineP95 -Scale 2) | $(Format-Number -Value $currentP95 -Scale 2) | $(Format-Number -Value ($currentP95 - $baselineP95) -Scale 2) | $(if ($null -eq $p95Pct) {'n/a'} else { (Format-Number -Value $p95Pct -Scale 2) + '%' }) |")
-    $lines.Add("| server_login_avg_latency_ms | $(Format-Number -Value $baselineServerAvg -Scale 2) | $(Format-Number -Value $currentServerAvg -Scale 2) | $(Format-Number -Value ($currentServerAvg - $baselineServerAvg) -Scale 2) | $(if ($null -eq $serverAvgPct) {'n/a'} else { (Format-Number -Value $serverAvgPct -Scale 2) + '%' }) |")
+    $lines.Add("| server_login_avg_latency_scenario_ms | $(Format-Number -Value $baselineServerAvg -Scale 2) | $(Format-Number -Value $currentServerAvg -Scale 2) | $(Format-Number -Value ($currentServerAvg - $baselineServerAvg) -Scale 2) | $(if ($null -eq $serverAvgPct) {'n/a'} else { (Format-Number -Value $serverAvgPct -Scale 2) + '%' }) |")
     $lines.Add("| auth_login_success_delta | $(Format-Number -Value $baselineSuccessDelta -Scale 0) | $(Format-Number -Value $currentSuccessDelta -Scale 0) | $(Format-Number -Value ($currentSuccessDelta - $baselineSuccessDelta) -Scale 0) | n/a |")
     $lines.Add("| auth_login_failure_delta | $(Format-Number -Value $baselineFailureDelta -Scale 0) | $(Format-Number -Value $currentFailureDelta -Scale 0) | $(Format-Number -Value ($currentFailureDelta - $baselineFailureDelta) -Scale 0) | n/a |")
     $lines.Add("")
@@ -487,9 +521,7 @@ $deltaDurationSeconds = [double]$deltaSnapshot.login_http_duration_seconds
 $deltaAvgMs = if ($deltaCount -gt 0.0) { ($deltaDurationSeconds / $deltaCount) * 1000.0 } else { 0.0 }
 
 $derived = [ordered]@{
-    login_http_avg_latency_before_ms = 0.0
-    login_http_avg_latency_after_ms = $deltaAvgMs
-    login_http_avg_latency_delta_ms = $deltaAvgMs
+    login_http_avg_latency_scenario_ms = $deltaAvgMs
     login_http_count_delta = $deltaCount
     auth_login_success_delta = [double]$deltaSnapshot.auth_login_success_total
     auth_login_failure_delta = [double]$deltaSnapshot.auth_login_failure_total
