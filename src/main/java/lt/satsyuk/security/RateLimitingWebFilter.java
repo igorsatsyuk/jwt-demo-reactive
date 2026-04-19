@@ -27,6 +27,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -48,6 +49,7 @@ public class RateLimitingWebFilter implements WebFilter {
     private final CacheManager cacheManager;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
+    private final List<CompiledRule> activeRules;
     private final ConcurrentMap<String, Counter> decisionCounters = new ConcurrentHashMap<>();
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -63,6 +65,7 @@ public class RateLimitingWebFilter implements WebFilter {
         this.cacheManager = cacheManager;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+        this.activeRules = compileRules();
         preRegisterDecisionCounters();
     }
 
@@ -85,7 +88,7 @@ public class RateLimitingWebFilter implements WebFilter {
                                        String method,
                                        String path,
                                        Authentication auth) {
-        for (RateLimitProperties.Rule rule : sortedRules()) {
+        for (CompiledRule rule : activeRules) {
             if (!matchesRequest(rule, method, path) || !matchesClient(rule, auth)) {
                 continue;
             }
@@ -101,61 +104,89 @@ public class RateLimitingWebFilter implements WebFilter {
         return chain.filter(exchange);
     }
 
-    private List<RateLimitProperties.Rule> sortedRules() {
+    private List<CompiledRule> compileRules() {
         return rateLimitProperties.getRules().stream()
                 .filter(RateLimitProperties.Rule::isEnabled)
                 .sorted(Comparator.comparingInt(RateLimitProperties.Rule::getOrder)
                         .thenComparing(RateLimitProperties.Rule::getId))
+                .map(this::compileRule)
                 .toList();
     }
 
-    private boolean matchesRequest(RateLimitProperties.Rule rule, String method, String path) {
+    private CompiledRule compileRule(RateLimitProperties.Rule rule) {
+        Set<String> normalizedMethods = normalizeMethods(rule.getMethods());
+        boolean methodsUnrestricted = normalizedMethods.isEmpty();
+        boolean wildcardMethod = normalizedMethods.contains("*");
+        Cache cache = cacheManager.getCache(resolveCacheName(rule));
+        return new CompiledRule(
+                rule,
+                cache,
+                safeValue(rule.getId()),
+                rule.getKeyStrategy().name().toLowerCase(Locale.ROOT),
+                methodsUnrestricted,
+                wildcardMethod,
+                normalizedMethods
+        );
+    }
+
+    private Set<String> normalizeMethods(Set<String> methods) {
+        if (methods == null || methods.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> normalized = new HashSet<>();
+        for (String candidate : methods) {
+            normalized.add(candidate == null ? "" : candidate.trim().toUpperCase(Locale.ROOT));
+        }
+        return Set.copyOf(normalized);
+    }
+
+    private boolean matchesRequest(CompiledRule rule, String method, String path) {
         return matchesPath(rule, path) && matchesMethod(rule, method);
     }
 
-    private boolean matchesPath(RateLimitProperties.Rule rule, String path) {
-        return path != null && pathMatcher.match(rule.getPathPattern(), path);
+    private boolean matchesPath(CompiledRule rule, String path) {
+        return path != null && pathMatcher.match(rule.rule().getPathPattern(), path);
     }
 
-    private boolean matchesMethod(RateLimitProperties.Rule rule, String method) {
-        Set<String> methods = rule.getMethods();
-        if (methods == null || methods.isEmpty()) {
+    private boolean matchesMethod(CompiledRule rule, String method) {
+        if (rule.methodsUnrestricted()) {
             return true;
         }
         if (!StringUtils.hasText(method)) {
             return false;
         }
+        if (rule.wildcardMethod()) {
+            return true;
+        }
 
         String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
-        return methods.stream()
-                .map(candidate -> candidate == null ? "" : candidate.trim().toUpperCase(Locale.ROOT))
-                .anyMatch(candidate -> "*".equals(candidate) || candidate.equals(normalizedMethod));
+        return rule.normalizedMethods().contains(normalizedMethod);
     }
 
-    private boolean matchesClient(RateLimitProperties.Rule rule, Authentication auth) {
-        Set<String> clientIds = rule.getClientIds();
+    private boolean matchesClient(CompiledRule rule, Authentication auth) {
+        Set<String> clientIds = rule.rule().getClientIds();
         if (clientIds == null || clientIds.isEmpty()) {
             return true;
         }
         return clientIds.contains(safeValue(securityService.clientId(auth)));
     }
 
-    private boolean isRateLimited(RateLimitProperties.Rule rule, String key) {
+    private boolean isRateLimited(CompiledRule rule, String key) {
         return !resolveBucket(rule, key).tryConsume(1);
     }
 
-    private Bucket resolveBucket(RateLimitProperties.Rule rule, String key) {
-        String cacheName = resolveCacheName(rule);
-        Cache cache = cacheManager.getCache(cacheName);
+    private Bucket resolveBucket(CompiledRule rule, String key) {
+        Cache cache = rule.cache();
+        String cacheName = resolveCacheName(rule.rule());
         if (cache == null) {
             throw new IllegalStateException("Cache '" + cacheName + "' is not configured");
         }
 
-        String cacheKey = rule.getId() + ":" + key;
+        String cacheKey = rule.rule().getId() + ":" + key;
         return cache.get(cacheKey, () -> Bucket.builder()
                 .addLimit(Bandwidth.classic(
-                        rule.getCapacity(),
-                        Refill.intervally(rule.getCapacity(), Duration.ofSeconds(rule.getWindowSeconds()))
+                        rule.rule().getCapacity(),
+                        Refill.intervally(rule.rule().getCapacity(), Duration.ofSeconds(rule.rule().getWindowSeconds()))
                 ))
                 .build()
         );
@@ -167,12 +198,12 @@ public class RateLimitingWebFilter implements WebFilter {
                 : DEFAULT_RATE_LIMIT_BUCKETS_CACHE;
     }
 
-    private String resolveKey(RateLimitProperties.Rule rule, ServerWebExchange exchange, Authentication auth) {
-        return switch (rule.getKeyStrategy()) {
+    private String resolveKey(CompiledRule rule, ServerWebExchange exchange, Authentication auth) {
+        return switch (rule.rule().getKeyStrategy()) {
             case IP -> "ip:" + safeValue(getRemoteAddress(exchange));
             case CLIENT_ID -> "client:" + safeValue(securityService.clientId(auth));
             case USERNAME -> "user:" + safeValue(securityService.username(auth));
-            case HEADER -> "header:" + safeValue(exchange.getRequest().getHeaders().getFirst(rule.getKeyHeader()));
+            case HEADER -> "header:" + safeValue(exchange.getRequest().getHeaders().getFirst(rule.rule().getKeyHeader()));
             case CLIENT_ID_AND_IP -> "client-ip:" + safeValue(securityService.clientId(auth)) + "|" + safeValue(getRemoteAddress(exchange));
         };
     }
@@ -194,9 +225,9 @@ public class RateLimitingWebFilter implements WebFilter {
         return StringUtils.hasText(value) ? value : "unknown";
     }
 
-    private void recordRateLimitDecision(RateLimitProperties.Rule rule, String decision) {
-        String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
-        String ruleId = safeValue(rule.getId());
+    private void recordRateLimitDecision(CompiledRule rule, String decision) {
+        String strategy = rule.strategyTag();
+        String ruleId = rule.ruleId();
         decisionCounters
                 .computeIfAbsent(counterKey(ruleId, strategy, decision),
                         cacheKey -> registerDecisionCounter(ruleId, strategy, decision))
@@ -204,12 +235,9 @@ public class RateLimitingWebFilter implements WebFilter {
     }
 
     private void preRegisterDecisionCounters() {
-        for (RateLimitProperties.Rule rule : rateLimitProperties.getRules()) {
-            if (!rule.isEnabled()) {
-                continue;
-            }
-            String ruleId = safeValue(rule.getId());
-            String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
+        for (CompiledRule rule : activeRules) {
+            String ruleId = rule.ruleId();
+            String strategy = rule.strategyTag();
             decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_ALLOWED), registerDecisionCounter(ruleId, strategy, DECISION_ALLOWED));
             decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_REJECTED), registerDecisionCounter(ruleId, strategy, DECISION_REJECTED));
         }
@@ -263,6 +291,15 @@ public class RateLimitingWebFilter implements WebFilter {
     private Locale resolveLocale(ServerWebExchange exchange) {
         Locale locale = exchange.getLocaleContext().getLocale();
         return locale != null ? locale : Locale.ENGLISH;
+    }
+
+    private record CompiledRule(RateLimitProperties.Rule rule,
+                                Cache cache,
+                                String ruleId,
+                                String strategyTag,
+                                boolean methodsUnrestricted,
+                                boolean wildcardMethod,
+                                Set<String> normalizedMethods) {
     }
 }
 
