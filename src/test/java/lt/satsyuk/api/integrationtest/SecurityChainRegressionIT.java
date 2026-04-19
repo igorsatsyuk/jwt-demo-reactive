@@ -105,6 +105,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
     @Test
     void prometheus_exposes_dpop_rejected_reason_metrics() {
+        stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
         doThrow(new lt.satsyuk.security.DpopProofValidationException("DPoP proof replay detected"))
                 .when(dpopProofValidator)
                 .validate(anyString(), anyString(), anyString(), anyString(), any());

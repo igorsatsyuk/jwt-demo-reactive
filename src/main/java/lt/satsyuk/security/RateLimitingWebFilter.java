@@ -38,6 +38,8 @@ import java.util.concurrent.ConcurrentMap;
 public class RateLimitingWebFilter implements WebFilter {
 
     private static final String RATE_LIMIT_MESSAGE_KEY = "api.error.tooManyRequests";
+    private static final String DECISION_ALLOWED = "allowed";
+    private static final String DECISION_REJECTED = "rejected";
     public static final String DEFAULT_RATE_LIMIT_BUCKETS_CACHE = "rateLimitBuckets";
 
     private final SecurityService securityService;
@@ -90,7 +92,7 @@ public class RateLimitingWebFilter implements WebFilter {
 
             String key = resolveKey(rule, exchange, auth);
             boolean shouldLimit = isRateLimited(rule, key);
-            recordRateLimitDecision(rule, shouldLimit ? "rejected" : "allowed");
+            recordRateLimitDecision(rule, shouldLimit ? DECISION_REJECTED : DECISION_ALLOWED);
 
             if (shouldLimit) {
                 return writeRateLimitedResponse(exchange);
@@ -208,8 +210,8 @@ public class RateLimitingWebFilter implements WebFilter {
             }
             String ruleId = safeValue(rule.getId());
             String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
-            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, "allowed"), registerDecisionCounter(ruleId, strategy, "allowed"));
-            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, "rejected"), registerDecisionCounter(ruleId, strategy, "rejected"));
+            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_ALLOWED), registerDecisionCounter(ruleId, strategy, DECISION_ALLOWED));
+            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_REJECTED), registerDecisionCounter(ruleId, strategy, DECISION_REJECTED));
         }
     }
 

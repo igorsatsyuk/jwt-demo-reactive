@@ -34,12 +34,14 @@ public class DpopAuthenticationWebFilter implements WebFilter {
     private static final String JKT = "jkt";
     private static final String DPOP_REJECTED_METRIC = "security.dpop.rejected";
     private static final String VALIDATION_FAILED_REASON = "validation_failed";
+    private static final String SCHEME_REQUIRED_REASON = "scheme_required";
+    private static final String PROOF_MISSING_REASON = "proof_missing";
     private static final List<ReasonMapping> REASON_MAPPINGS = List.of(
             ReasonMapping.of("uri_scheme_required", "URI scheme is required for DPoP validation"),
             ReasonMapping.of("replay_detected", "replay"),
-            ReasonMapping.of("scheme_required", "scheme"),
+            ReasonMapping.of(SCHEME_REQUIRED_REASON, "scheme"),
             ReasonMapping.of("host_required", "host"),
-            ReasonMapping.of("proof_missing", "proof is required", "header is missing"),
+            ReasonMapping.of(PROOF_MISSING_REASON, "proof is required", "header is missing"),
             ReasonMapping.of("uri_mismatch", "URI mismatch"),
             ReasonMapping.of("method_mismatch", "method mismatch"),
             ReasonMapping.of("jkt_mismatch", "thumbprint mismatch"),
@@ -47,8 +49,8 @@ public class DpopAuthenticationWebFilter implements WebFilter {
             ReasonMapping.of("iat_out_of_range", "expired", "issued in the future")
     );
     private static final List<String> KNOWN_REJECTION_REASONS = List.of(
-            "scheme_required",
-            "proof_missing",
+            SCHEME_REQUIRED_REASON,
+            PROOF_MISSING_REASON,
             VALIDATION_FAILED_REASON,
             "uri_scheme_required",
             "replay_detected",
@@ -107,12 +109,12 @@ public class DpopAuthenticationWebFilter implements WebFilter {
         }
 
         if (!usesDpopScheme) {
-            recordDpopRejected("scheme_required");
+            recordDpopRejected(SCHEME_REQUIRED_REASON);
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP authorization scheme is required"));
         }
 
         if (!StringUtils.hasText(dpopProof)) {
-            recordDpopRejected("proof_missing");
+            recordDpopRejected(PROOF_MISSING_REASON);
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP proof is required"));
         }
 
