@@ -2,6 +2,8 @@ package lt.satsyuk.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.resource.introspection.ReactiveOpaqueTokenIntrospector;
 import org.springframework.util.StringUtils;
@@ -22,11 +24,14 @@ public class CachingReactiveOpaqueTokenIntrospector implements ReactiveOpaqueTok
     private final boolean cacheEnabled;
     private final Cache<String, OAuth2AuthenticatedPrincipal> cache;
     private final ConcurrentHashMap<String, Mono<OAuth2AuthenticatedPrincipal>> inFlight = new ConcurrentHashMap<>();
+    private final Counter cacheHitCounter;
+    private final Counter cacheMissCounter;
 
     public CachingReactiveOpaqueTokenIntrospector(ReactiveOpaqueTokenIntrospector delegate,
                                                   boolean cacheEnabled,
                                                   Duration ttl,
-                                                  long maxSize) {
+                                                  long maxSize,
+                                                  MeterRegistry meterRegistry) {
         Duration normalizedTtl = (ttl == null || ttl.isZero() || ttl.isNegative())
                 ? Duration.ofSeconds(10)
                 : ttl;
@@ -36,6 +41,14 @@ public class CachingReactiveOpaqueTokenIntrospector implements ReactiveOpaqueTok
                 .maximumSize(Math.max(1, maxSize))
                 .expireAfterWrite(normalizedTtl)
                 .build();
+        this.cacheHitCounter = Counter.builder("security.opaque_introspection.cache")
+                .tag("result", "hit")
+                .description("Opaque token introspection cache hits")
+                .register(meterRegistry);
+        this.cacheMissCounter = Counter.builder("security.opaque_introspection.cache")
+                .tag("result", "miss")
+                .description("Opaque token introspection cache misses")
+                .register(meterRegistry);
     }
 
     @Override
@@ -47,6 +60,7 @@ public class CachingReactiveOpaqueTokenIntrospector implements ReactiveOpaqueTok
         String tokenKey = tokenCacheKey(token);
         OAuth2AuthenticatedPrincipal cached = cache.getIfPresent(tokenKey);
         if (cached != null) {
+            cacheHitCounter.increment();
             return Mono.just(cached);
         }
 
@@ -61,7 +75,12 @@ public class CachingReactiveOpaqueTokenIntrospector implements ReactiveOpaqueTok
                 .cache();
 
         Mono<OAuth2AuthenticatedPrincipal> previous = inFlight.putIfAbsent(tokenKey, loading);
-        return previous != null ? previous : loading;
+        if (previous != null) {
+            return previous;
+        }
+
+        cacheMissCounter.increment();
+        return loading;
     }
 
     private String tokenCacheKey(String token) {

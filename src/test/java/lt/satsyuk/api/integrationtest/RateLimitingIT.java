@@ -125,6 +125,30 @@ class RateLimitingIT extends WireMockIntegrationTest {
         requestClients("other-token").expectStatus().isBadRequest();
     }
 
+    @Test
+    void prometheus_exposes_rate_limit_decision_metrics() {
+        stubTokenEndpointSuccess();
+
+        doLogin("en").expectStatus().isOk();
+        doLogin("en").expectStatus().isOk();
+        doLogin("en").expectStatus().isEqualTo(429);
+
+        String metrics = webTestClient.get()
+                .uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_rate_limit_decisions_total")
+                .contains("rule_id=\"login\"")
+                .contains("decision=\"allowed\"")
+                .contains("decision=\"rejected\"");
+    }
+
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec doLogin(String language) {
         return webTestClient.post()
                 .uri("/api/auth/login")

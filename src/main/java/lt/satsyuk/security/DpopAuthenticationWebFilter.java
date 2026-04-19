@@ -1,6 +1,7 @@
 package lt.satsyuk.security;
 
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.config.DpopProperties;
@@ -17,22 +18,66 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DpopAuthenticationWebFilter implements WebFilter {
 
     private static final String DPOP_HEADER = "DPoP";
     private static final String DPOP_SCHEME = "DPoP ";
     private static final String CNF = "cnf";
     private static final String JKT = "jkt";
+    private static final String DPOP_REJECTED_METRIC = "security.dpop.rejected";
+    private static final String VALIDATION_FAILED_REASON = "validation_failed";
+    private static final String SCHEME_REQUIRED_REASON = "scheme_required";
+    private static final String PROOF_MISSING_REASON = "proof_missing";
+    private static final List<ReasonMapping> REASON_MAPPINGS = List.of(
+            ReasonMapping.of("uri_scheme_required", "URI scheme is required for DPoP validation"),
+            ReasonMapping.of("replay_detected", "replay"),
+            ReasonMapping.of(SCHEME_REQUIRED_REASON, "scheme"),
+            ReasonMapping.of("host_required", "host"),
+            ReasonMapping.of(PROOF_MISSING_REASON, "proof is required", "header is missing"),
+            ReasonMapping.of("uri_mismatch", "URI mismatch"),
+            ReasonMapping.of("method_mismatch", "method mismatch"),
+            ReasonMapping.of("jkt_mismatch", "thumbprint mismatch"),
+            ReasonMapping.of("ath_mismatch", "access token hash mismatch"),
+            ReasonMapping.of("iat_out_of_range", "expired", "issued in the future")
+    );
+    private static final List<String> KNOWN_REJECTION_REASONS = List.of(
+            SCHEME_REQUIRED_REASON,
+            PROOF_MISSING_REASON,
+            VALIDATION_FAILED_REASON,
+            "uri_scheme_required",
+            "replay_detected",
+            "host_required",
+            "uri_mismatch",
+            "method_mismatch",
+            "jkt_mismatch",
+            "ath_mismatch",
+            "iat_out_of_range"
+    );
 
     private final DpopProperties properties;
     private final DpopProofValidator validator;
     private final JsonAuthEntryPoint authEntryPoint;
+    private final MeterRegistry meterRegistry;
+    private final Map<String, Counter> rejectedCounters;
+
+    public DpopAuthenticationWebFilter(DpopProperties properties,
+                                        DpopProofValidator validator,
+                                        JsonAuthEntryPoint authEntryPoint,
+                                        MeterRegistry meterRegistry) {
+        this.properties = properties;
+        this.validator = validator;
+        this.authEntryPoint = authEntryPoint;
+        this.meterRegistry = meterRegistry;
+        this.rejectedCounters = initRejectedCounters();
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -64,10 +109,12 @@ public class DpopAuthenticationWebFilter implements WebFilter {
         }
 
         if (!usesDpopScheme) {
+            recordDpopRejected(SCHEME_REQUIRED_REASON);
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP authorization scheme is required"));
         }
 
         if (!StringUtils.hasText(dpopProof)) {
+            recordDpopRejected(PROOF_MISSING_REASON);
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException("DPoP proof is required"));
         }
 
@@ -80,7 +127,51 @@ public class DpopAuthenticationWebFilter implements WebFilter {
             return chain.filter(exchange);
         } catch (DpopProofValidationException ex) {
             log.warn("DPoP validation failed: {}", ex.getMessage());
+            recordDpopRejected(mapDpopRejectReason(ex.getMessage()));
             return authEntryPoint.commence(exchange, new InsufficientAuthenticationException(ex.getMessage()));
+        }
+    }
+
+    private void recordDpopRejected(String reason) {
+        rejectedCounters.computeIfAbsent(reason, this::registerRejectedCounter).increment();
+    }
+
+    private String mapDpopRejectReason(String message) {
+        if (!StringUtils.hasText(message)) {
+            return VALIDATION_FAILED_REASON;
+        }
+        for (ReasonMapping mapping : REASON_MAPPINGS) {
+            if (mapping.matches(message)) {
+                return mapping.reason();
+            }
+        }
+        return VALIDATION_FAILED_REASON;
+    }
+
+    private Map<String, Counter> initRejectedCounters() {
+        Map<String, Counter> counters = new ConcurrentHashMap<>();
+        for (String reason : KNOWN_REJECTION_REASONS) {
+            counters.put(reason, registerRejectedCounter(reason));
+        }
+        return counters;
+    }
+
+    private Counter registerRejectedCounter(String reason) {
+        return meterRegistry.counter(DPOP_REJECTED_METRIC, "reason", reason);
+    }
+
+    private record ReasonMapping(String reason, List<String> markers) {
+        private static ReasonMapping of(String reason, String... markers) {
+            return new ReasonMapping(reason, List.copyOf(Arrays.asList(markers)));
+        }
+
+        private boolean matches(String message) {
+            for (String marker : markers) {
+                if (message.contains(marker)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

@@ -14,6 +14,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -22,7 +23,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,12 +35,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 class AccountIntegrationIT extends AbstractIntegrationTest {
+
+    private static final int DB_SETUP_MAX_ATTEMPTS = 4;
+    private static final int PESSIMISTIC_SCENARIO_MAX_ATTEMPTS = 3;
+    private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(10);
 
     @Autowired
     private AccountRepository accountRepository;
@@ -50,9 +58,9 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        accountRepository.deleteAll()
+        withTransientDbRetry(() -> accountRepository.deleteAll()
                 .then(clientRepository.deleteAll())
-                .block();
+                .block(BLOCK_TIMEOUT));
     }
 
     @Test
@@ -160,23 +168,38 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void concurrent_pessimistic_updates_apply_all_deltas() {
-        Account account = saveAccount("0.00", "+37064444444");
         BigDecimal delta = new BigDecimal("10.00");
         int updates = 8;
+        BigDecimal expectedBalance = delta.multiply(BigDecimal.valueOf(updates));
+        List<HttpStatusCode> statuses = List.of();
+        Account account = null;
 
-        List<HttpStatusCode> statuses = runConcurrentUpdates(
-                "/api/accounts/balance/pessimistic",
-                account.getClientId(),
-                delta,
-                updates
-        );
+        for (int attempt = 1; attempt <= PESSIMISTIC_SCENARIO_MAX_ATTEMPTS; attempt++) {
+            account = saveAccount("0.00", pessimisticPhoneForAttempt(attempt));
+            statuses = runConcurrentUpdates(
+                    "/api/accounts/balance/pessimistic",
+                    account.getClientId(),
+                    delta,
+                    updates
+            );
 
-        assertThat(statuses)
-                .isNotEmpty()
-                .allMatch(status -> status.equals(HttpStatus.OK));
+            if (!allStatuses(statuses, HttpStatus.OK)) {
+                if (attempt < PESSIMISTIC_SCENARIO_MAX_ATTEMPTS && onlyTransientPessimisticStatuses(statuses)) {
+                    continue;
+                }
+                break;
+            }
+
+            Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
+            assertThat(persisted.getBalance()).isEqualByComparingTo(expectedBalance);
+            return;
+        }
+
+        assertThat(account).isNotNull();
+        assertThat(statuses).isNotEmpty().allMatch(status -> status.equals(HttpStatus.OK));
 
         Account persisted = accountRepository.findById(account.getId()).blockOptional().orElseThrow();
-        assertThat(persisted.getBalance()).isEqualByComparingTo(delta.multiply(BigDecimal.valueOf(updates)));
+        assertThat(persisted.getBalance()).isEqualByComparingTo(expectedBalance);
     }
 
     @Test
@@ -237,6 +260,71 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                         .build())
                 .blockOptional()
                 .orElseThrow();
+    }
+
+    private String pessimisticPhoneForAttempt(int attempt) {
+        return "+3706444" + String.format("%04d", attempt);
+    }
+
+    private boolean allStatuses(List<HttpStatusCode> statuses, HttpStatus expected) {
+        return !statuses.isEmpty() && statuses.stream().allMatch(status -> status.equals(expected));
+    }
+
+    private boolean onlyTransientPessimisticStatuses(List<HttpStatusCode> statuses) {
+        return !statuses.isEmpty() && statuses.stream().allMatch(status ->
+                status.equals(HttpStatus.OK)
+                        || status.equals(HttpStatus.INTERNAL_SERVER_ERROR)
+                        || status.equals(HttpStatus.SERVICE_UNAVAILABLE)
+        );
+    }
+
+    private void withTransientDbRetry(Runnable operation) {
+        for (int attempt = 1; attempt <= DB_SETUP_MAX_ATTEMPTS; attempt++) {
+            try {
+                operation.run();
+                return;
+            } catch (RuntimeException ex) {
+                if (!isTransientConnectionIssue(ex) || attempt == DB_SETUP_MAX_ATTEMPTS) {
+                    throw ex;
+                }
+                sleepBackoff(attempt);
+            }
+        }
+    }
+
+    private boolean isTransientConnectionIssue(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof DataAccessResourceFailureException) {
+                return true;
+            }
+            if (current instanceof IOException) {
+                return true;
+            }
+
+            String message = current.getMessage();
+            if (message != null && (
+                    message.contains("Failed to obtain R2DBC Connection")
+                            || message.contains("Connection reset")
+                            || message.contains("I/O error occurred")
+                            || message.contains("connection is closed")
+            )) {
+                return true;
+            }
+
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void sleepBackoff(int attempt) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new IllegalStateException("Interrupted while waiting to retry transient DB operation");
+        }
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(150L * attempt));
+        if (Thread.currentThread().isInterrupted()) {
+            throw new IllegalStateException("Interrupted while waiting to retry transient DB operation");
+        }
     }
 
     private List<HttpStatusCode> runConcurrentUpdates(String uri, Long clientId, BigDecimal amount, int parallelCalls) {

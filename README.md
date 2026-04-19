@@ -319,6 +319,21 @@ Telemetry pipelines:
 - logs: `management.otlp.logging.endpoint`
 - metrics: Prometheus scrape `/actuator/prometheus`
 
+Custom business/security metrics:
+- `auth.login{result}` - login attempts (`success`/`failure`)
+- `auth.refresh{result}` - refresh attempts (`success`/`failure`)
+- `auth.logout{result}` - logout attempts (`success`/`failure`)
+- `security.http.responses{status,endpoint_group}` - counters for `401/403` responses from security handlers
+- `security.dpop.rejected{reason}` - DPoP rejection counters grouped by normalized reason (`scheme_required`, `proof_missing`, `replay_detected`, etc.)
+- `security.opaque_introspection.cache{result}` - opaque token introspection cache `hit/miss`
+- `security.rate_limit.decisions{rule_id,key_strategy,decision}` - rate limit decisions (`allowed/rejected`) per rule
+- `request.worker.reclaimed_count` - number of stale `PROCESSING` requests reclaimed back to `PENDING`
+- `request.worker.stale_processing_age` - age of the oldest reclaimed stale `PROCESSING` request
+- `request.worker.claim_lag_seconds` - claim lag distribution (request creation -> worker claim)
+- `request.worker.claim_batch_size` - distribution of claimed batch size per worker iteration
+- `request.worker.processing_duration{terminal_status}` - processing duration timer for `COMPLETED/FAILED`
+- `request.worker.terminal_status{status}` - terminal status counters (`COMPLETED/FAILED`)
+
 Recommended settings:
 - `management.logging.export.otlp.enabled=true`
 - `management.otlp.metrics.export.enabled=false`
@@ -363,6 +378,9 @@ The following alerts are provisioned from `ops/grafana/provisioning/alerting/ale
 | `jwt-high-p95-latency` | p95 HTTP latency | `> 800 ms` | `5m` | `warning` |
 | `jwt-high-cpu-saturation` | process CPU usage | `> 90%` | `10m` | `critical` |
 | `jwt-high-heap-saturation` | JVM heap usage | `> 90%` | `10m` | `critical` |
+| `jwt-high-rate-limit-reject-ratio` | rate-limit reject ratio | `> 20%` | `5m` | `warning` |
+| `jwt-dpop-reject-spike` | DPoP rejected requests | `> 20 events / 5m` | `5m` | `warning` |
+| `jwt-worker-failed-terminal-ratio` | async worker FAILED terminal ratio | `> 10%` | `10m` | `warning` |
 
 On-call quick actions:
 1. Open Grafana and locate the firing rule in Alerting.
@@ -372,6 +390,11 @@ On-call quick actions:
 5. In Tempo, inspect the slow/error spans and identify the failing upstream or handler.
 6. For `critical` alerts (`CPU`/`Heap`), page immediately if sustained beyond the configured `for` window.
 7. For `warning` alerts, escalate if impact persists for two consecutive evaluation windows.
+
+PromQL examples for custom metrics:
+- Rate-limit reject ratio (5m): `100 * sum(rate(security_rate_limit_decisions_total{decision="rejected"}[5m])) / clamp_min(sum(rate(security_rate_limit_decisions_total[5m])), 1)`
+- DPoP reject spike (5m): `sum(increase(security_dpop_rejected_total[5m]))`
+- Worker failed ratio (10m): `100 * sum(rate(request_worker_terminal_status_total{status="FAILED"}[10m])) / clamp_min(sum(rate(request_worker_terminal_status_total[10m])), 1)`
 
 ---
 

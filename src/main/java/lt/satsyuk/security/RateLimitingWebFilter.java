@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lt.satsyuk.config.RateLimitProperties;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.service.MessageService;
@@ -30,12 +31,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Component
-@RequiredArgsConstructor
 public class RateLimitingWebFilter implements WebFilter {
 
     private static final String RATE_LIMIT_MESSAGE_KEY = "api.error.tooManyRequests";
+    private static final String DECISION_ALLOWED = "allowed";
+    private static final String DECISION_REJECTED = "rejected";
     public static final String DEFAULT_RATE_LIMIT_BUCKETS_CACHE = "rateLimitBuckets";
 
     private final SecurityService securityService;
@@ -43,7 +47,24 @@ public class RateLimitingWebFilter implements WebFilter {
     private final RateLimitProperties rateLimitProperties;
     private final CacheManager cacheManager;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
+    private final ConcurrentMap<String, Counter> decisionCounters = new ConcurrentHashMap<>();
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
+
+    public RateLimitingWebFilter(SecurityService securityService,
+                                 MessageService messageService,
+                                 RateLimitProperties rateLimitProperties,
+                                 CacheManager cacheManager,
+                                 ObjectMapper objectMapper,
+                                 MeterRegistry meterRegistry) {
+        this.securityService = securityService;
+        this.messageService = messageService;
+        this.rateLimitProperties = rateLimitProperties;
+        this.cacheManager = cacheManager;
+        this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
+        preRegisterDecisionCounters();
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -65,9 +86,13 @@ public class RateLimitingWebFilter implements WebFilter {
                                        String path,
                                        Authentication auth) {
         for (RateLimitProperties.Rule rule : sortedRules()) {
-            boolean shouldLimit = matchesRequest(rule, method, path)
-                    && matchesClient(rule, auth)
-                    && isRateLimited(rule, resolveKey(rule, exchange, auth));
+            if (!matchesRequest(rule, method, path) || !matchesClient(rule, auth)) {
+                continue;
+            }
+
+            String key = resolveKey(rule, exchange, auth);
+            boolean shouldLimit = isRateLimited(rule, key);
+            recordRateLimitDecision(rule, shouldLimit ? DECISION_REJECTED : DECISION_ALLOWED);
 
             if (shouldLimit) {
                 return writeRateLimitedResponse(exchange);
@@ -167,6 +192,43 @@ public class RateLimitingWebFilter implements WebFilter {
 
     private String safeValue(String value) {
         return StringUtils.hasText(value) ? value : "unknown";
+    }
+
+    private void recordRateLimitDecision(RateLimitProperties.Rule rule, String decision) {
+        String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
+        String ruleId = safeValue(rule.getId());
+        decisionCounters
+                .computeIfAbsent(counterKey(ruleId, strategy, decision),
+                        cacheKey -> registerDecisionCounter(ruleId, strategy, decision))
+                .increment();
+    }
+
+    private void preRegisterDecisionCounters() {
+        for (RateLimitProperties.Rule rule : rateLimitProperties.getRules()) {
+            if (!rule.isEnabled()) {
+                continue;
+            }
+            String ruleId = safeValue(rule.getId());
+            String strategy = rule.getKeyStrategy().name().toLowerCase(Locale.ROOT);
+            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_ALLOWED), registerDecisionCounter(ruleId, strategy, DECISION_ALLOWED));
+            decisionCounters.putIfAbsent(counterKey(ruleId, strategy, DECISION_REJECTED), registerDecisionCounter(ruleId, strategy, DECISION_REJECTED));
+        }
+    }
+
+    private String counterKey(String ruleId, String strategy, String decision) {
+        return ruleId + "|" + strategy + "|" + decision;
+    }
+
+    private Counter registerDecisionCounter(String ruleId, String strategy, String decision) {
+        return meterRegistry.counter(
+                "security.rate_limit.decisions",
+                "rule_id",
+                ruleId,
+                "key_strategy",
+                strategy,
+                "decision",
+                decision
+        );
     }
 
     public void clearBuckets() {

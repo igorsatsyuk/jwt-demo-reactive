@@ -21,9 +21,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -84,8 +85,6 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
     @Test
     void dpop_filter_validates_proof_once_for_single_protected_request() {
-        doNothing().when(dpopProofValidator)
-                .validate(anyString(), anyString(), anyString(), anyString(), anyString());
         stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
 
         webTestClient.get()
@@ -102,6 +101,34 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
                 eq("proof-1"),
                 eq("expected-jkt")
         );
+    }
+
+    @Test
+    void prometheus_exposes_dpop_rejected_reason_metrics() {
+        stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
+        doThrow(new lt.satsyuk.security.DpopProofValidationException("DPoP proof replay detected"))
+                .when(dpopProofValidator)
+                .validate(anyString(), anyString(), anyString(), anyString(), any());
+
+        webTestClient.get()
+                .uri("/api/accounts/client/999999")
+                .header(AUTHORIZATION, "DPoP dpop-token")
+                .header("DPoP", "proof-replay")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        String metrics = webTestClient.get()
+                .uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_dpop_rejected_total")
+                .contains("reason=\"replay_detected\"");
     }
 
     @Test
@@ -149,6 +176,36 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         assertTraceAndRequestHeaders(result);
         assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.TRACE_ID_HEADER);
         assertThat(result.getResponseHeaders().getAccessControlExposeHeaders()).contains(TraceIdResponseHeaderWebFilter.REQUEST_ID_HEADER);
+    }
+
+    @Test
+    void prometheus_exposes_security_http_response_metrics() {
+        webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        stubIntrospectionWithoutRoles("no-role-token");
+        webTestClient.get()
+                .uri("/api/accounts/client/1")
+                .header(AUTHORIZATION, "Bearer no-role-token")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        String metrics = webTestClient.get()
+                .uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(metrics)
+                .isNotNull()
+                .contains("security_http_responses_total")
+                .contains("status=\"401\"")
+                .contains("status=\"403\"")
+                .contains("endpoint_group=\"accounts\"");
     }
 
     private void assertTraceAndRequestHeaders(EntityExchangeResult<?> result) {

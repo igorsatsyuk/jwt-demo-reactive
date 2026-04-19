@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
@@ -30,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @Slf4j
@@ -42,6 +44,12 @@ public class RequestService {
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
     private final Counter reclaimedCount;
     private final DistributionSummary staleProcessingAgeSeconds;
+    private final DistributionSummary claimLagSeconds;
+    private final DistributionSummary claimBatchSize;
+    private final Timer completedProcessingDuration;
+    private final Timer failedProcessingDuration;
+    private final Counter completedTerminalStatusCount;
+    private final Counter failedTerminalStatusCount;
 
     public RequestService(RequestRepository requestRepository,
                           ClientService clientService,
@@ -58,6 +66,29 @@ public class RequestService {
         this.staleProcessingAgeSeconds = DistributionSummary.builder("request.worker.stale_processing_age")
                 .baseUnit("seconds")
                 .description("Age in seconds of the oldest reclaimed stale PROCESSING request")
+                .register(meterRegistry);
+        this.claimLagSeconds = DistributionSummary.builder("request.worker.claim_lag_seconds")
+                .baseUnit("seconds")
+                .description("Time between request creation and claim by worker")
+                .register(meterRegistry);
+        this.claimBatchSize = DistributionSummary.builder("request.worker.claim_batch_size")
+                .description("Number of requests claimed in a worker iteration")
+                .register(meterRegistry);
+        this.completedProcessingDuration = Timer.builder("request.worker.processing_duration")
+                .description("Processing time for async worker requests")
+                .tag("terminal_status", "COMPLETED")
+                .register(meterRegistry);
+        this.failedProcessingDuration = Timer.builder("request.worker.processing_duration")
+                .description("Processing time for async worker requests")
+                .tag("terminal_status", "FAILED")
+                .register(meterRegistry);
+        this.completedTerminalStatusCount = Counter.builder("request.worker.terminal_status")
+                .description("Count of terminal statuses written by request worker")
+                .tag("status", "COMPLETED")
+                .register(meterRegistry);
+        this.failedTerminalStatusCount = Counter.builder("request.worker.terminal_status")
+                .description("Count of terminal statuses written by request worker")
+                .tag("status", "FAILED")
                 .register(meterRegistry);
     }
 
@@ -144,10 +175,24 @@ public class RequestService {
 
     private Mono<Void> claimAndProcessBatch() {
         OffsetDateTime claimedAt = now();
+        AtomicInteger claimedCount = new AtomicInteger();
         return reclaimStaleProcessingRequests(claimedAt)
                 .thenMany(requestRepository.claimPendingClientCreateBatch(workerBatchSize, claimedAt))
+                .doOnNext(request -> {
+                    claimedCount.incrementAndGet();
+                    recordClaimLag(claimedAt, request);
+                })
                 .concatMap(this::processClaimedRequest)
-                .then();
+                .then(Mono.fromRunnable(() -> claimBatchSize.record(claimedCount.get())));
+    }
+
+    private void recordClaimLag(OffsetDateTime claimedAt, Request request) {
+        OffsetDateTime createdAt = request.getCreatedAt();
+        if (createdAt == null) {
+            return;
+        }
+        double lagSeconds = Math.max(0d, Duration.between(createdAt, claimedAt).toMillis() / 1000d);
+        claimLagSeconds.record(lagSeconds);
     }
 
     private Mono<Void> reclaimStaleProcessingRequests(OffsetDateTime now) {
@@ -176,6 +221,7 @@ public class RequestService {
 
     private Mono<Void> processClaimedRequest(Request request) {
         UUID requestId = request.getId();
+        long startedNanos = System.nanoTime();
         return Mono.defer(() -> {
                     if (request.getType() != RequestType.CLIENT_CREATE) {
                         return Mono.error(new IllegalStateException("Unsupported request type: " + request.getType()));
@@ -183,16 +229,20 @@ public class RequestService {
 
                     CreateClientRequest payload = readJson(request.getRequestData(), CreateClientRequest.class);
                     return clientService.create(payload)
-                            .flatMap(clientResponse -> markCompleted(requestId, clientResponse));
+                            .flatMap(clientResponse -> markCompleted(requestId, clientResponse, startedNanos));
                 })
-                .onErrorResume(ex -> markFailed(requestId, ex));
+                .onErrorResume(ex -> markFailed(requestId, ex, startedNanos));
     }
 
-    private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse) {
+    private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse, long startedNanos) {
         String responseJson = writeJson(AppResponse.ok(clientResponse));
         return requestRepository.markCompleted(requestId, responseJson, now())
                 .doOnNext(updated -> {
                     if (updated == 1) {
+                        completedTerminalStatusCount.increment();
+                        if (startedNanos > 0L) {
+                            completedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos));
+                        }
                         log.info("Client creation request {} completed", requestId);
                     } else {
                         log.warn("Client creation request {} completion skipped because state changed", requestId);
@@ -201,12 +251,17 @@ public class RequestService {
                 .then();
     }
 
-    private Mono<Void> markFailed(UUID requestId, Throwable ex) {
+
+    private Mono<Void> markFailed(UUID requestId, Throwable ex, long startedNanos) {
         AppResponse<Void> errorPayload = toWorkerError(ex);
         String errorJson = writeJson(errorPayload);
         return requestRepository.markFailed(requestId, errorJson, now())
                 .doOnNext(updated -> {
                     if (updated == 1) {
+                        if (startedNanos > 0L) {
+                            failedProcessingDuration.record(Duration.ofNanos(System.nanoTime() - startedNanos));
+                        }
+                        failedTerminalStatusCount.increment();
                         log.warn("Client creation request {} failed: {}", requestId, ex.getMessage());
                     } else {
                         log.warn("Client creation request {} failure update skipped because state changed", requestId);

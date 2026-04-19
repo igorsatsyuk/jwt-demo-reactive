@@ -39,13 +39,14 @@ class RequestServiceTest {
     private final RequestRepository requestRepository = mock(RequestRepository.class);
     private final ClientService clientService = mock(ClientService.class);
     private final MessageService messageService = mock(MessageService.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private final RequestService requestService = new RequestService(
             requestRepository,
             clientService,
             new ObjectMapper(),
             messageService,
-            new SimpleMeterRegistry()
+            meterRegistry
     );
 
     @Test
@@ -147,6 +148,29 @@ class RequestServiceTest {
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).markCompleted(any(), anyString(), any());
         verify(requestRepository, never()).markFailed(any(), anyString(), any());
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isEqualTo(1L);
+    }
+
+    @Test
+    void processClaimedRequest_doesNotRecordCompletedMetricsWhenCompletionSkipped() {
+        UUID id = UUID.randomUUID();
+        CreateClientRequest payload = new CreateClientRequest("John", "Doe", "+37060000008");
+        Request request = Request.builder()
+                .id(id)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.PROCESSING)
+                .requestData("{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37060000008\"}")
+                .build();
+
+        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, "John", "Doe", "+37060000008")));
+        when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(0));
+
+        Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
+
+        StepVerifier.create(result).verifyComplete();
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isZero();
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isZero();
     }
 
     @Test
@@ -166,6 +190,28 @@ class RequestServiceTest {
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).markFailed(any(), anyString(), any());
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isEqualTo(1L);
+    }
+
+    @Test
+    void processClaimedRequest_doesNotRecordFailedMetricsWhenFailureUpdateSkipped() {
+        UUID id = UUID.randomUUID();
+        Request request = Request.builder()
+                .id(id)
+                .type(RequestType.OTHER)
+                .status(RequestStatus.PROCESSING)
+                .requestData("{}")
+                .build();
+
+        when(messageService.getMessage("api.error.internalServerError")).thenReturn("Internal server error");
+        when(requestRepository.markFailed(any(), anyString(), any())).thenReturn(Mono.just(0));
+
+        Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
+
+        StepVerifier.create(result).verifyComplete();
+        assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isZero();
+        assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isZero();
     }
 
     @Test
@@ -270,6 +316,8 @@ class RequestServiceTest {
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).reclaimStaleClientCreateRequests(any(), any());
+        assertThat(meterRegistry.counter("request.worker.reclaimed_count").count()).isEqualTo(2.0d);
+        assertThat(meterRegistry.summary("request.worker.stale_processing_age").count()).isEqualTo(1L);
     }
 
     @Test
@@ -280,7 +328,8 @@ class RequestServiceTest {
                 requestService,
                 "markCompleted",
                 UUID.randomUUID(),
-                new ClientResponse(1L, "John", "Doe", "+37060000007")
+                new ClientResponse(1L, "John", "Doe", "+37060000007"),
+                -1L
         );
 
         StepVerifier.create(result).verifyComplete();
@@ -295,7 +344,8 @@ class RequestServiceTest {
                 requestService,
                 "markFailed",
                 UUID.randomUUID(),
-                new IllegalStateException("boom")
+                new IllegalStateException("boom"),
+                -1L
         );
 
         StepVerifier.create(result).verifyComplete();
@@ -330,6 +380,26 @@ class RequestServiceTest {
 
         assertThat(workerRunning.get()).isFalse();
         verify(requestRepository).claimPendingClientCreateBatch(any(Integer.class), any());
+        assertThat(meterRegistry.summary("request.worker.claim_batch_size").count()).isEqualTo(1L);
+    }
+
+    @Test
+    void recordClaimLag_skipsWhenCreatedAtMissing() {
+        Request request = Request.builder()
+                .id(UUID.randomUUID())
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.PENDING)
+                .createdAt(null)
+                .build();
+
+        ReflectionTestUtils.invokeMethod(
+                requestService,
+                "recordClaimLag",
+                OffsetDateTime.now(),
+                request
+        );
+
+        assertThat(meterRegistry.summary("request.worker.claim_lag_seconds").count()).isZero();
     }
 
     @Test
