@@ -225,6 +225,20 @@ mvn -Dtest=KeycloakAuthServiceTest test
 mvn -DskipTests=false "-Dit.test=RequestWorkerMultiInstanceIT" verify
 ```
 
+### Optional Perf Smoke (for perf-related changes)
+
+For quick before/after checks without full load-testing stack:
+
+```pwsh
+$env:PERF_SMOKE_USERNAME = "user"
+$env:PERF_SMOKE_PASSWORD = "<password>"
+$env:PERF_SMOKE_CLIENT_SECRET = "<client-secret>"
+pwsh ./ops/perf/perf-smoke.ps1 -BaseUrl http://localhost:8081 -Requests 5 -WarmupRequests 0
+```
+
+See `ops/perf/README.md` for baseline comparison flow.
+Default login rate limit is `5 requests / 60 seconds` per IP; increase/disable it temporarily if you need larger smoke runs.
+
 ---
 
 ## Docker Compose Quick Commands

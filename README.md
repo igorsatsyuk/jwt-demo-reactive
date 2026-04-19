@@ -305,6 +305,10 @@ For multi-instance safety, stale `PROCESSING` reclaim is implemented and indexed
   - `app.request.worker.processing-timeout`
 - Reclaim path is optimized by index:
   - `idx_request_status_type_status_changed_at` on `(status, type, status_changed_at)`
+- Basic perf smoke scenario with before/after metric diff:
+  - script: `ops/perf/perf-smoke.ps1`
+  - usage docs: `ops/perf/README.md`
+  - output reports: `target/perf/perf-smoke-*.{json,md}`
 
 ---
 

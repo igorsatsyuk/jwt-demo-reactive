@@ -25,13 +25,13 @@
 - [x] Добавить 2-instance IT (два контекста против одной БД) для проверки отсутствия дублей `request.id`
 - [x] Дополнительные проверки валидации и сообщений ошибок для account/request API
 - [x] Финализировать API docs (Swagger/OpenAPI)
-- [ ] Performance: оптимизация запросов и оценка кэширования
+- [x] Performance: оптимизация запросов и оценка кэширования
   - [x] SQL: перенести limit поиска клиентов в SQL (без post-fetch `take`)
   - [x] Security: добавить кэш интроспекции opaque token (TTL + max-size)
   - [x] DB: убрать лишние round-trip в create-пути клиента (`existsByPhone` -> upsert/insert-first стратегия)
   - [x] Worker: сократить reclaim-запросы (объединение метрик/апдейта, где возможно)
   - [x] DB: добавить partial index под claim-путь request worker (`created_at` where `status='PENDING'` and `type='CLIENT_CREATE'`)
-  - [ ] Observability: добавить базовый perf smoke сценарий и метрики сравнения до/после
+  - [x] Observability: добавить базовый perf smoke сценарий и метрики сравнения до/после
 
 ## Low
 
