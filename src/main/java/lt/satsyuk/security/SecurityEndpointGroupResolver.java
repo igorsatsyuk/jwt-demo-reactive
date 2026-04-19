@@ -9,7 +9,7 @@ public final class SecurityEndpointGroupResolver {
         if (path == null || path.isBlank()) {
             return "unknown";
         }
-        if (path.startsWith("/api/auth/")) {
+        if (path.equals("/api/auth") || path.startsWith("/api/auth/")) {
             return "auth";
         }
         if (path.startsWith("/api/clients")) {

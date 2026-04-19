@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -319,11 +320,12 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     }
 
     private void sleepBackoff(int attempt) {
-        try {
-            Thread.sleep(150L * attempt);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting to retry transient DB operation", interrupted);
+        if (Thread.currentThread().isInterrupted()) {
+            throw new IllegalStateException("Interrupted while waiting to retry transient DB operation");
+        }
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(150L * attempt));
+        if (Thread.currentThread().isInterrupted()) {
+            throw new IllegalStateException("Interrupted while waiting to retry transient DB operation");
         }
     }
 

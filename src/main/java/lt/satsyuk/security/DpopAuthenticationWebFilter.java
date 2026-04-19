@@ -101,6 +101,9 @@ public class DpopAuthenticationWebFilter implements WebFilter {
         if (message.contains("replay")) {
             return "replay_detected";
         }
+        if (message.contains("URI scheme is required for DPoP validation")) {
+            return "uri_scheme_required";
+        }
         if (message.contains("scheme")) {
             return "scheme_required";
         }

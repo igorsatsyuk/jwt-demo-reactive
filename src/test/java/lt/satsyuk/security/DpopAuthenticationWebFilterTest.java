@@ -215,6 +215,11 @@ class DpopAuthenticationWebFilterTest {
         assertMappedReason("URI host is required for DPoP validation", "host_required");
     }
 
+    @Test
+    void filter_recordsUriSchemeRequiredReason() {
+        assertMappedReason("URI scheme is required for DPoP validation", "uri_scheme_required");
+    }
+
     private void assertMappedReason(String validatorMessage, String expectedReason) {
         properties.setEnabled(true);
         WebFilterChain chain = mock(WebFilterChain.class);
