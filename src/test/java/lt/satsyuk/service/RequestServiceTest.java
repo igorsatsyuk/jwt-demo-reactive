@@ -409,6 +409,26 @@ class RequestServiceTest {
         assertThat(result).isFalse();
     }
 
+    @Test
+    void resolveWorkerMaxConcurrency_clampsToBatchSize() {
+        ReflectionTestUtils.setField(requestService, "workerBatchSize", 3);
+        ReflectionTestUtils.setField(requestService, "workerMaxConcurrency", 10);
+
+        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency");
+
+        assertThat(resolved).isEqualTo(3);
+    }
+
+    @Test
+    void resolveWorkerMaxConcurrency_normalizesNonPositiveValues() {
+        ReflectionTestUtils.setField(requestService, "workerBatchSize", 0);
+        ReflectionTestUtils.setField(requestService, "workerMaxConcurrency", -5);
+
+        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency");
+
+        assertThat(resolved).isEqualTo(1);
+    }
+
     private static class FailingObjectMapper extends ObjectMapper {
         @Override
         public String writeValueAsString(Object value) throws JsonProcessingException {

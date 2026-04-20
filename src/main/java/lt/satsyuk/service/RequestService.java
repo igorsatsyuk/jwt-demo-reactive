@@ -95,6 +95,9 @@ public class RequestService {
     @Value("${app.request.worker.batch-size:10}")
     private int workerBatchSize;
 
+    @Value("${app.request.worker.max-concurrency:2}")
+    private int workerMaxConcurrency;
+
     @Value("${app.request.worker.retry.max-attempts:3}")
     private long workerRetryMaxAttempts;
 
@@ -176,14 +179,21 @@ public class RequestService {
     private Mono<Void> claimAndProcessBatch() {
         OffsetDateTime claimedAt = now();
         AtomicInteger claimedCount = new AtomicInteger();
+        int maxConcurrency = resolveWorkerMaxConcurrency();
         return reclaimStaleProcessingRequests(claimedAt)
                 .thenMany(requestRepository.claimPendingClientCreateBatch(workerBatchSize, claimedAt))
                 .doOnNext(request -> {
                     claimedCount.incrementAndGet();
                     recordClaimLag(claimedAt, request);
                 })
-                .concatMap(this::processClaimedRequest)
+                .flatMapSequential(this::processClaimedRequest, maxConcurrency, 1)
                 .then(Mono.fromRunnable(() -> claimBatchSize.record(claimedCount.get())));
+    }
+
+    private int resolveWorkerMaxConcurrency() {
+        int normalizedBatchSize = Math.max(1, workerBatchSize);
+        int normalizedConcurrency = Math.max(1, workerMaxConcurrency);
+        return Math.min(normalizedBatchSize, normalizedConcurrency);
     }
 
     private void recordClaimLag(OffsetDateTime claimedAt, Request request) {
