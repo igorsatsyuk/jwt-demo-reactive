@@ -299,6 +299,7 @@ For multi-instance safety, stale `PROCESSING` reclaim is implemented and indexed
 - Client search supports trigram indexes if `pg_trgm` extension exists; migration creates indexes conditionally.
 - Async worker tunables are configurable in `application.properties`:
   - `app.request.worker.batch-size`
+  - `app.request.worker.max-concurrency` (env: `APP_REQUEST_WORKER_MAX_CONCURRENCY`)
   - `app.request.worker.interval-ms`
   - `app.request.worker.retry.max-attempts`
   - `app.request.worker.retry.backoff-ms`
