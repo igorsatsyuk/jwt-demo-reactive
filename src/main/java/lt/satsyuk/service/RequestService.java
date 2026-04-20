@@ -200,8 +200,20 @@ public class RequestService {
     }
 
     private int resolveWorkerMaxConcurrency(int normalizedBatchSize) {
-        int normalizedConcurrency = Math.max(1, workerMaxConcurrency);
-        return Math.min(normalizedBatchSize, normalizedConcurrency);
+        if (workerMaxConcurrency < 1) {
+            log.warn("Invalid app.request.worker.max-concurrency={} configured; using 1", workerMaxConcurrency);
+            return 1;
+        }
+        if (workerMaxConcurrency > normalizedBatchSize) {
+            log.warn(
+                    "app.request.worker.max-concurrency={} exceeds effective batch-size={}; using {}",
+                    workerMaxConcurrency,
+                    normalizedBatchSize,
+                    normalizedBatchSize
+            );
+            return normalizedBatchSize;
+        }
+        return workerMaxConcurrency;
     }
 
     private void recordClaimLag(OffsetDateTime claimedAt, Request request) {

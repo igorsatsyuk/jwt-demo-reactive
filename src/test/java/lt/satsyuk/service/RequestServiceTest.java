@@ -398,7 +398,7 @@ class RequestServiceTest {
 
         requestService.processPendingRequests();
 
-        verify(requestRepository).claimPendingClientCreateBatch(eq(1), any());
+        verify(requestRepository).claimPendingClientCreateBatch(eq(1), any(OffsetDateTime.class));
     }
 
     @Test
