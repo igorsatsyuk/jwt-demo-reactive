@@ -187,7 +187,7 @@ test(integration): add multi-instance claim regression
 
 ## Pull Request Process
 
-1. Branch from `master`
+1. Branch from `main`
 2. Implement changes with tests
 3. Ensure checks pass
 4. Open PR with clear description and risk notes

@@ -42,7 +42,7 @@
 - For new async request types, update all three layers together: DB constraints/migration (`request.type` check), worker claim/process logic, and integration tests.
 
 ## Git workflow defaults (for AI and developers)
-- Base branch: create work branches from `master` unless task explicitly says otherwise.
+- Base branch: create work branches from `main` unless task explicitly says otherwise.
 - Branch naming: use `feature/`, `bugfix/`, `hotfix/`, `chore/`, `docs/`, `test/` (for example: `docs/update-reactive-api-docs`).
 - Commit format: use Conventional Commits, `<type>(<scope>): <short description>`.
 - Commit style: prefer small atomic commits grouped by one logical change; avoid mixing refactor + feature + docs in one commit.
