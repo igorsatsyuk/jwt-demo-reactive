@@ -179,9 +179,10 @@ public class RequestService {
     private Mono<Void> claimAndProcessBatch() {
         OffsetDateTime claimedAt = now();
         AtomicInteger claimedCount = new AtomicInteger();
-        int maxConcurrency = resolveWorkerMaxConcurrency();
+        int normalizedBatchSize = resolveWorkerBatchSize();
+        int maxConcurrency = resolveWorkerMaxConcurrency(normalizedBatchSize);
         return reclaimStaleProcessingRequests(claimedAt)
-                .thenMany(requestRepository.claimPendingClientCreateBatch(workerBatchSize, claimedAt))
+                .thenMany(requestRepository.claimPendingClientCreateBatch(normalizedBatchSize, claimedAt))
                 .doOnNext(request -> {
                     claimedCount.incrementAndGet();
                     recordClaimLag(claimedAt, request);
@@ -190,8 +191,15 @@ public class RequestService {
                 .then(Mono.fromRunnable(() -> claimBatchSize.record(claimedCount.get())));
     }
 
-    private int resolveWorkerMaxConcurrency() {
-        int normalizedBatchSize = Math.max(1, workerBatchSize);
+    private int resolveWorkerBatchSize() {
+        if (workerBatchSize < 1) {
+            log.warn("Invalid app.request.worker.batch-size={} configured; using 1", workerBatchSize);
+            return 1;
+        }
+        return workerBatchSize;
+    }
+
+    private int resolveWorkerMaxConcurrency(int normalizedBatchSize) {
         int normalizedConcurrency = Math.max(1, workerMaxConcurrency);
         return Math.min(normalizedBatchSize, normalizedConcurrency);
     }

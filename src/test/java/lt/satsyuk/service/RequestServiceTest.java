@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -384,6 +385,23 @@ class RequestServiceTest {
     }
 
     @Test
+    void processPendingRequests_normalizesInvalidBatchSizeForClaim() {
+        ReflectionTestUtils.setField(requestService, "workerProcessingTimeout", Duration.ofMinutes(1));
+        ReflectionTestUtils.setField(requestService, "workerBatchSize", 0);
+        ReflectionTestUtils.setField(requestService, "workerMaxConcurrency", 5);
+        ReflectionTestUtils.setField(requestService, "workerRetryMaxAttempts", 1L);
+        ReflectionTestUtils.setField(requestService, "workerRetryBackoffMs", 1L);
+
+        when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
+                .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(0, 0)));
+        when(requestRepository.claimPendingClientCreateBatch(any(Integer.class), any())).thenReturn(Flux.empty());
+
+        requestService.processPendingRequests();
+
+        verify(requestRepository).claimPendingClientCreateBatch(eq(1), any());
+    }
+
+    @Test
     void recordClaimLag_skipsWhenCreatedAtMissing() {
         Request request = Request.builder()
                 .id(UUID.randomUUID())
@@ -411,20 +429,27 @@ class RequestServiceTest {
 
     @Test
     void resolveWorkerMaxConcurrency_clampsToBatchSize() {
-        ReflectionTestUtils.setField(requestService, "workerBatchSize", 3);
         ReflectionTestUtils.setField(requestService, "workerMaxConcurrency", 10);
 
-        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency");
+        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency", 3);
 
         assertThat(resolved).isEqualTo(3);
     }
 
     @Test
-    void resolveWorkerMaxConcurrency_normalizesNonPositiveValues() {
-        ReflectionTestUtils.setField(requestService, "workerBatchSize", 0);
+    void resolveWorkerMaxConcurrency_normalizesNonPositiveConcurrency() {
         ReflectionTestUtils.setField(requestService, "workerMaxConcurrency", -5);
 
-        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency");
+        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerMaxConcurrency", 4);
+
+        assertThat(resolved).isEqualTo(1);
+    }
+
+    @Test
+    void resolveWorkerBatchSize_normalizesNonPositiveValues() {
+        ReflectionTestUtils.setField(requestService, "workerBatchSize", 0);
+
+        Integer resolved = ReflectionTestUtils.invokeMethod(requestService, "resolveWorkerBatchSize");
 
         assertThat(resolved).isEqualTo(1);
     }
