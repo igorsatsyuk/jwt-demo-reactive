@@ -21,6 +21,7 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -79,10 +80,10 @@ class ClientServiceTest {
     void create_usesFastPathWhenDuplicateKeyMessageAlreadyContainsPhoneConstraint() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000011");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        TrackingConstraintDuplicateKeyException duplicateKeyException =
+                new TrackingConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"");
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(
-                new ExplosiveConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"")
-        ));
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(duplicateKeyException));
 
         StepVerifier.create(clientService.create(request))
                 .expectErrorSatisfies(error -> {
@@ -90,6 +91,8 @@ class ClientServiceTest {
                     assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
                 })
                 .verify();
+
+        assertThat(duplicateKeyException.wasConstraintLookupCalled()).isFalse();
 
         verifyNoInteractions(accountRepository);
     }
@@ -269,15 +272,21 @@ class ClientServiceTest {
         }
     }
 
-    private static final class ExplosiveConstraintDuplicateKeyException extends DuplicateKeyException {
+    private static final class TrackingConstraintDuplicateKeyException extends DuplicateKeyException {
+        private final AtomicBoolean constraintLookupCalled = new AtomicBoolean(false);
 
-        private ExplosiveConstraintDuplicateKeyException(String msg) {
+        private TrackingConstraintDuplicateKeyException(String msg) {
             super(msg);
         }
 
         @SuppressWarnings("unused")
         public String getConstraintName() {
-            throw new AssertionError("reflection fallback must not be invoked on fast-path");
+            constraintLookupCalled.set(true);
+            return "uq_client_phone";
+        }
+
+        private boolean wasConstraintLookupCalled() {
+            return constraintLookupCalled.get();
         }
     }
 }

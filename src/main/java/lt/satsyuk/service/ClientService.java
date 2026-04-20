@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +29,7 @@ public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
+    private static final Pattern CONSTRAINT_NAME_SPLITTER = Pattern.compile("[^a-z0-9_]+");
     private static final Set<String> PHONE_UNIQUE_CONSTRAINTS = Set.of(
             "uq_client_phone",
             "client_phone_key"
@@ -103,8 +105,13 @@ public class ClientService {
             return false;
         }
         String normalizedMessage = message.toLowerCase(Locale.ROOT);
-        return normalizedMessage.contains("uq_client_phone")
-                || normalizedMessage.contains("client_phone_key");
+        String[] tokens = CONSTRAINT_NAME_SPLITTER.split(normalizedMessage);
+        for (String token : tokens) {
+            if (PHONE_UNIQUE_CONSTRAINTS.contains(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String extractConstraintName(Throwable throwable) {
