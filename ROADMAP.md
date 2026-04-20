@@ -42,5 +42,8 @@
   - [x] Добавить тесты на публикацию ключевых метрик (unit + интеграционный smoke через `/actuator/prometheus`)
   - [x] Обновить Grafana/alerting и документацию (README + runbook) с порогами и примерами запросов
 - [ ] Reactive streams optimization
+  - [ ] Stage 1: RateLimitingWebFilter optimization PoC
+  - [ ] Stage 2: RequestService worker concurrency tuning
+  - [x] Stage 3: ClientService error-path micro-optimization (fast-path + reflection fallback)
 - [ ] GraphQL (опционально)
 

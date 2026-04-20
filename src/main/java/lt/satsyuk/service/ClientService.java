@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +28,6 @@ public class ClientService {
 
     public static final int MIN_SEARCH_QUERY_LENGTH = 3;
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
-    private static final Pattern CONSTRAINT_NAME_SPLITTER = Pattern.compile("[^a-z0-9_]+");
     private static final Set<String> PHONE_UNIQUE_CONSTRAINTS = Set.of(
             "uq_client_phone",
             "client_phone_key"
@@ -57,33 +55,40 @@ public class ClientService {
     }
 
     private boolean isPhoneUniqueViolation(Throwable throwable) {
-        boolean hasPhoneConstraint = false;
-        boolean isUniqueViolation = false;
+        boolean hasPhoneConstraintInMessage = false;
+        boolean hasUniqueViolation = false;
+
         Throwable current = throwable;
         while (current != null) {
-            String constraintName = extractConstraintName(current);
-            if (isPhoneConstraintName(constraintName)) {
-                hasPhoneConstraint = true;
-            }
-            String message = current.getMessage();
-            if (containsPhoneConstraintName(message)) {
-                hasPhoneConstraint = true;
-            }
+            hasUniqueViolation = hasUniqueViolation || isUniqueViolation(current);
+            hasPhoneConstraintInMessage = hasPhoneConstraintInMessage || containsPhoneConstraintName(current.getMessage());
 
-            if (current instanceof DuplicateKeyException) {
-                isUniqueViolation = true;
+            if (hasUniqueViolation && hasPhoneConstraintInMessage) {
+                return true;
             }
-            if (current instanceof R2dbcDataIntegrityViolationException integrity
-                    && UNIQUE_VIOLATION_SQLSTATE.equals(integrity.getSqlState())) {
-                isUniqueViolation = true;
-            }
+            current = current.getCause();
+        }
 
-            if (hasPhoneConstraint && isUniqueViolation) {
+        if (!hasUniqueViolation) {
+            return false;
+        }
+
+        current = throwable;
+        while (current != null) {
+            if (isPhoneConstraintName(extractConstraintName(current))) {
                 return true;
             }
             current = current.getCause();
         }
         return false;
+    }
+
+    private boolean isUniqueViolation(Throwable throwable) {
+        if (throwable instanceof DuplicateKeyException) {
+            return true;
+        }
+        return throwable instanceof R2dbcDataIntegrityViolationException integrity
+                && UNIQUE_VIOLATION_SQLSTATE.equals(integrity.getSqlState());
     }
 
     private boolean isPhoneConstraintName(String constraintName) {
@@ -98,13 +103,8 @@ public class ClientService {
             return false;
         }
         String normalizedMessage = message.toLowerCase(Locale.ROOT);
-        String[] tokens = CONSTRAINT_NAME_SPLITTER.split(normalizedMessage);
-        for (String token : tokens) {
-            if (PHONE_UNIQUE_CONSTRAINTS.contains(token)) {
-                return true;
-            }
-        }
-        return false;
+        return normalizedMessage.contains("uq_client_phone")
+                || normalizedMessage.contains("client_phone_key");
     }
 
     private String extractConstraintName(Throwable throwable) {

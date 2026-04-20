@@ -76,6 +76,25 @@ class ClientServiceTest {
     }
 
     @Test
+    void create_usesFastPathWhenDuplicateKeyMessageAlreadyContainsPhoneConstraint() {
+        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000011");
+        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(
+                new ExplosiveConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"")
+        ));
+
+        StepVerifier.create(clientService.create(request))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
+                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
+                })
+                .verify();
+
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
     void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
         CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000006");
         Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
@@ -247,6 +266,18 @@ class ClientServiceTest {
 
         public String getConstraintName() {
             return constraintName;
+        }
+    }
+
+    private static final class ExplosiveConstraintDuplicateKeyException extends DuplicateKeyException {
+
+        private ExplosiveConstraintDuplicateKeyException(String msg) {
+            super(msg);
+        }
+
+        @SuppressWarnings("unused")
+        public String getConstraintName() {
+            throw new AssertionError("reflection fallback must not be invoked on fast-path");
         }
     }
 }
