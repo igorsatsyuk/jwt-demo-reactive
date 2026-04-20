@@ -1,6 +1,6 @@
 # ROADMAP
 
-Актуально на: **2026-04-19**
+Актуально на: **2026-04-20**
 
 Канонический список приоритетов для проекта `jwt-demo-reactive`.
 
@@ -41,6 +41,9 @@
   - [x] Добавить метрики по async worker: claim lag, batch size, processing duration, terminal status (`COMPLETED/FAILED`)
   - [x] Добавить тесты на публикацию ключевых метрик (unit + интеграционный smoke через `/actuator/prometheus`)
   - [x] Обновить Grafana/alerting и документацию (README + runbook) с порогами и примерами запросов
-- [ ] Reactive streams optimization
+- [x] Reactive streams optimization
+  - [x] Stage 1: RateLimitingWebFilter optimization PoC
+  - [x] Stage 2: RequestService worker concurrency tuning
+  - [x] Stage 3: ClientService error-path micro-optimization (fast-path + reflection fallback)
 - [ ] GraphQL (опционально)
 
