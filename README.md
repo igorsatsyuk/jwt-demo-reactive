@@ -17,6 +17,11 @@ This project keeps the same business scenarios as `jwt-demo`, but the implementa
 
 ---
 
+## 📄 License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
+
+
 ## ✨ Supported Features
 
 - Username/password login, token refresh, logout (`/api/auth/*`)
