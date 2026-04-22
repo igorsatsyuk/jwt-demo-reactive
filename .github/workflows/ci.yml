@@ -58,36 +58,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # -----------------------------
-      # Telegram notification
-      # -----------------------------
-      - name: Notify Telegram
-        if: always()
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            🚀 jwt-demo-reactive CI завершён
-
-            *Статус:* ${{ job.status }}
-            *Бранч:* ${{ github.ref_name }}
-            *Коммит:* ${{ github.sha }}
-            *Автор:* ${{ github.actor }}
-
-            🧪 *Unit Tests*
-            - Total: ${{ steps.unit.outputs.total }}
-            - Passed: ${{ steps.unit.outputs.passed }}
-            - Failed: ${{ steps.unit.outputs.failed }}
-            - Skipped: ${{ steps.unit.outputs.skipped }}
-
-            🔧 *Integration Tests*
-            - Total: ${{ steps.integration.outputs.total }}
-            - Passed: ${{ steps.integration.outputs.passed }}
-            - Failed: ${{ steps.integration.outputs.failed }}
-            - Skipped: ${{ steps.integration.outputs.skipped }}
-          format: markdown
-
       - name: Test Reports Summary (Actions UI)
         if: always()
         shell: bash
@@ -125,6 +95,36 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
           use-actions-summary: true
+
+      # -----------------------------
+      # Telegram notification
+      # -----------------------------
+      - name: Notify Telegram
+        if: always()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            🚀 jwt-demo-reactive CI завершён
+
+            *Статус:* ${{ job.status }}
+            *Бранч:* ${{ github.ref_name }}
+            *Коммит:* ${{ github.sha }}
+            *Автор:* ${{ github.actor }}
+
+            🧪 *Unit Tests*
+            - Total: ${{ steps.unit.outputs.total }}
+            - Passed: ${{ steps.unit.outputs.passed }}
+            - Failed: ${{ steps.unit.outputs.failed }}
+            - Skipped: ${{ steps.unit.outputs.skipped }}
+
+            🔧 *Integration Tests*
+            - Total: ${{ steps.integration.outputs.total }}
+            - Passed: ${{ steps.integration.outputs.passed }}
+            - Failed: ${{ steps.integration.outputs.failed }}
+            - Skipped: ${{ steps.integration.outputs.skipped }}
+          format: markdown
 
       # -----------------------------
       # PR Comment with test results
