@@ -37,6 +37,8 @@ import static org.mockito.Mockito.when;
 
 class RequestServiceTest {
 
+    protected static final String JOHN = "John";
+    protected static final String DOE = "Doe";
     private final RequestRepository requestRepository = mock(RequestRepository.class);
     private final ClientService clientService = mock(ClientService.class);
     private final MessageService messageService = mock(MessageService.class);
@@ -52,7 +54,7 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequest_failsWhenInsertDidNotPersistExactlyOneRow() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001");
 
         when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(0));
@@ -66,7 +68,7 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequest_returnsAcceptedWhenInsertPersistsOneRow() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000002");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002");
         when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
@@ -133,7 +135,7 @@ class RequestServiceTest {
     @Test
     void processClaimedRequest_marksCompletedOnSuccess() {
         UUID id = UUID.randomUUID();
-        CreateClientRequest payload = new CreateClientRequest("John", "Doe", "+37060000003");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000003");
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)
@@ -141,7 +143,7 @@ class RequestServiceTest {
                 .requestData("{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37060000003\"}")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, "John", "Doe", "+37060000003")));
+        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
         when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(1));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
@@ -156,7 +158,7 @@ class RequestServiceTest {
     @Test
     void processClaimedRequest_doesNotRecordCompletedMetricsWhenCompletionSkipped() {
         UUID id = UUID.randomUUID();
-        CreateClientRequest payload = new CreateClientRequest("John", "Doe", "+37060000008");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000008");
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)
@@ -164,7 +166,7 @@ class RequestServiceTest {
                 .requestData("{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37060000008\"}")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, "John", "Doe", "+37060000008")));
+        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
         when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
@@ -329,7 +331,7 @@ class RequestServiceTest {
                 requestService,
                 "markCompleted",
                 UUID.randomUUID(),
-                new ClientResponse(1L, "John", "Doe", "+37060000007"),
+                new ClientResponse(1L, JOHN, DOE, "+37060000007"),
                 -1L
         );
 

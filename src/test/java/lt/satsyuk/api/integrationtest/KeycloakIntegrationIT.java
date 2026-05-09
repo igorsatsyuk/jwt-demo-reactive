@@ -12,16 +12,13 @@ class KeycloakIntegrationIT extends KeycloakIntegrationTest {
 
     @Test
     void login_success() {
-        KeycloakTokenResponse data = loginAndGetData(USERNAME, USER_PASSWORD);
-        assertThat(data).isNotNull();
-        assertThat(data.getAccessToken()).isNotBlank();
-        assertThat(data.getRefreshToken()).isNotBlank();
+        loginAndAssertOk(USERNAME, USER_PASSWORD);
     }
 
     @Test
     void login_wrong_password() {
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange(USERNAME, "wrongpassword");
+                loginExchange(USERNAME, "wrong-password");
 
         assertErrorResult(result, 401, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -29,17 +26,14 @@ class KeycloakIntegrationIT extends KeycloakIntegrationTest {
     @Test
     void login_unknown_user() {
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("unknownuser", "whatever");
+                loginExchange("unknown-user", "whatever");
 
         assertErrorResult(result, 401, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
 
     @Test
     void admin_login_success() {
-        KeycloakTokenResponse data = loginAndGetData(ADMIN, ADMIN_PASSWORD);
-        assertThat(data).isNotNull();
-        assertThat(data.getAccessToken()).isNotBlank();
-        assertThat(data.getRefreshToken()).isNotBlank();
+        loginAndAssertOk(ADMIN, ADMIN_PASSWORD);
     }
 
     @Test

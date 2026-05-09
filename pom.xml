@@ -23,8 +23,15 @@
 		<oauth2.oidc.sdk.version>11.9.1</oauth2.oidc.sdk.version>
 		<springdoc.version>3.0.0</springdoc.version>
 		<testcontainers.version>1.20.4</testcontainers.version>
+		<testcontainers-keycloak.version>4.1.1</testcontainers-keycloak.version>
+		<wiremock-standalone.version>3.3.1</wiremock-standalone.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<jacoco.version>0.8.14</jacoco.version>
+		<maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+		<maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
+		<surefireArgLine/>
+		<failsafeArgLine/>
+		<sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
 		<!-- SonarQube Properties -->
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco-merged/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 		<sonar.junit.reportPaths>${project.build.directory}/surefire-reports,${project.build.directory}/failsafe-reports</sonar.junit.reportPaths>
@@ -199,13 +206,13 @@
 		<dependency>
 			<groupId>com.github.dasniko</groupId>
 			<artifactId>testcontainers-keycloak</artifactId>
-			<version>4.1.1</version>
+			<version>${testcontainers-keycloak.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.wiremock</groupId>
 			<artifactId>wiremock-standalone</artifactId>
-			<version>3.3.1</version>
+			<version>${wiremock-standalone.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -318,7 +325,7 @@
 		<plugin>
 			<groupId>org.apache.maven.plugins</groupId>
 			<artifactId>maven-surefire-plugin</artifactId>
-			<version>3.2.5</version>
+			<version>${maven-surefire-plugin.version}</version>
 			<configuration>
 				<includes>
 					<include>**/*Test*.java</include>
@@ -326,15 +333,15 @@
 				<excludes>
 					<exclude>**/*IT*.java</exclude>
 				</excludes>
-				<argLine>@{surefireArgLine}</argLine>
+				<argLine>${surefireArgLine}</argLine>
 			</configuration>
 		</plugin>
 		<plugin>
 			<groupId>org.apache.maven.plugins</groupId>
 			<artifactId>maven-failsafe-plugin</artifactId>
-			<version>3.2.5</version>
+			<version>${maven-failsafe-plugin.version}</version>
 			<configuration>
-				<argLine>@{failsafeArgLine}</argLine>
+				<argLine>${failsafeArgLine}</argLine>
 				<includes>
 					<include>**/*IT*.java</include>
 				</includes>
@@ -364,7 +371,7 @@
 		<plugin>
 			<groupId>org.sonarsource.scanner.maven</groupId>
 			<artifactId>sonar-maven-plugin</artifactId>
-			<version>4.0.0.4121</version>
+			<version>${sonar-maven-plugin.version}</version>
 		</plugin>
 		</plugins>
 	</build>

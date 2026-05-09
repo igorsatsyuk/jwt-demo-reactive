@@ -34,6 +34,12 @@ import static org.mockito.Mockito.when;
 
 class ClientServiceTest {
 
+    protected static final String JOHN = "John";
+    protected static final String DOE = "Doe";
+    protected static final String JANE = "Jane";
+    protected static final String SMITH = "Smith";
+    protected static final String ANNA = "Anna";
+    protected static final String BOB = "Bob";
     private final ClientRepository clientRepository = mock(ClientRepository.class);
     private final AccountRepository accountRepository = mock(AccountRepository.class);
     private final ClientMapper clientMapper = mock(ClientMapper.class);
@@ -42,8 +48,8 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenPhoneAlreadyExistsWithoutPreCheck() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000000");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000000");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("uq_client_phone")));
 
@@ -61,8 +67,8 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenLegacyConstraintNameIsReported() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000009");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000009");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
 
@@ -78,8 +84,8 @@ class ClientServiceTest {
 
     @Test
     void create_usesFastPathWhenDuplicateKeyMessageAlreadyContainsPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000011");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000011");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         TrackingConstraintDuplicateKeyException duplicateKeyException =
                 new TrackingConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"");
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
@@ -99,8 +105,8 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000006");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000006");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         Throwable wrapped = new R2dbcDataIntegrityViolationException(
                 "duplicate",
                 "23505",
@@ -121,8 +127,8 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenConstraintAppearsInSqlExceptionMessage() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000007");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000007");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         R2dbcDataIntegrityViolationException violation = new R2dbcDataIntegrityViolationException(
                 "duplicate key value violates unique constraint \"uq_client_phone\"",
                 "23505"
@@ -142,8 +148,8 @@ class ClientServiceTest {
 
     @Test
     void create_propagatesUniqueViolationForNonPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000008");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000008");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         DuplicateKeyException error = new DuplicateKeyException("account_client_id_key");
 
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
@@ -161,7 +167,7 @@ class ClientServiceTest {
 
     @Test
     void create_emitsMapperFailureReactively() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000010");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000010");
         IllegalStateException mapperFailure = new IllegalStateException("mapper failed");
         when(clientMapper.toEntity(request)).thenThrow(mapperFailure);
 
@@ -177,11 +183,11 @@ class ClientServiceTest {
 
     @Test
     void create_persistsClientAndAccount_thenReturnsMappedResponse() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
-        Client savedClient = Client.builder().id(11L).firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
+        Client savedClient = Client.builder().id(11L).firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         Account savedAccount = Account.builder().id(20L).clientId(11L).balance(BigDecimal.ZERO).build();
-        ClientResponse response = new ClientResponse(11L, "John", "Doe", request.phone());
+        ClientResponse response = new ClientResponse(11L, JOHN, DOE, request.phone());
 
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.just(savedClient));
@@ -195,8 +201,8 @@ class ClientServiceTest {
 
     @Test
     void create_propagatesGenericDataIntegrityViolation() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000002");
-        Client mappedClient = Client.builder().firstName("John").lastName("Doe").phone(request.phone()).build();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002");
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         DataIntegrityViolationException error = new DataIntegrityViolationException("not null");
 
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
@@ -214,8 +220,8 @@ class ClientServiceTest {
 
     @Test
     void get_returnsClientWhenFound() {
-        Client client = Client.builder().id(7L).firstName("Jane").lastName("Doe").phone("+37060000003").build();
-        ClientResponse response = new ClientResponse(7L, "Jane", "Doe", "+37060000003");
+        Client client = Client.builder().id(7L).firstName(JANE).lastName(DOE).phone("+37060000003").build();
+        ClientResponse response = new ClientResponse(7L, JANE, DOE, "+37060000003");
 
         when(clientRepository.findById(7L)).thenReturn(Mono.just(client));
         when(clientMapper.toResponse(client)).thenReturn(response);
@@ -245,13 +251,13 @@ class ClientServiceTest {
     void search_trimsQueryAndAppliesMaxResultsLimit() {
         ReflectionTestUtils.setField(clientService, "searchMaxResults", 2);
 
-        Client c1 = Client.builder().id(1L).firstName("Anna").lastName("Smith").phone("+37060000004").build();
-        Client c2 = Client.builder().id(2L).firstName("Bob").lastName("Smith").phone("+37060000005").build();
+        Client c1 = Client.builder().id(1L).firstName(ANNA).lastName(SMITH).phone("+37060000004").build();
+        Client c2 = Client.builder().id(2L).firstName(BOB).lastName(SMITH).phone("+37060000005").build();
 
-        ClientResponse r1 = new ClientResponse(1L, "Anna", "Smith", "+37060000004");
-        ClientResponse r2 = new ClientResponse(2L, "Bob", "Smith", "+37060000005");
+        ClientResponse r1 = new ClientResponse(1L, ANNA, SMITH, "+37060000004");
+        ClientResponse r2 = new ClientResponse(2L, BOB, SMITH, "+37060000005");
 
-        when(clientRepository.searchByNameOrSurname("Smith", 2)).thenReturn(Flux.just(c1, c2));
+        when(clientRepository.searchByNameOrSurname(SMITH, 2)).thenReturn(Flux.just(c1, c2));
         when(clientMapper.toResponse(c1)).thenReturn(r1);
         when(clientMapper.toResponse(c2)).thenReturn(r2);
 

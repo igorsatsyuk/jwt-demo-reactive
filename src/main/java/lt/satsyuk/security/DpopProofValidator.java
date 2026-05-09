@@ -15,6 +15,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.config.DpopProperties;
+import lt.satsyuk.exception.DpopProofValidationException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 

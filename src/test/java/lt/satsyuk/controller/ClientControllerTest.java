@@ -21,6 +21,8 @@ import static org.mockito.Mockito.when;
 
 class ClientControllerTest {
 
+    protected static final String SMITH = "Smith";
+    protected static final String DOE = "Doe";
     private final ClientService clientService = mock(ClientService.class);
     private final RequestService requestService = mock(RequestService.class);
 
@@ -28,7 +30,7 @@ class ClientControllerTest {
 
     @Test
     void create_returnsAcceptedEnvelope() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000000");
+        CreateClientRequest request = new CreateClientRequest("John", DOE, "+37060000000");
         RequestAcceptedResponse accepted = new RequestAcceptedResponse(UUID.randomUUID(), RequestStatus.PENDING);
         when(requestService.submitClientCreateRequest(request)).thenReturn(Mono.just(accepted));
 
@@ -42,7 +44,7 @@ class ClientControllerTest {
 
     @Test
     void get_wrapsClientResponseIntoAppResponse() {
-        ClientResponse client = new ClientResponse(10L, "Jane", "Doe", "+37060000001");
+        ClientResponse client = new ClientResponse(10L, "Jane", DOE, "+37060000001");
         when(clientService.get(10L)).thenReturn(Mono.just(client));
 
         StepVerifier.create(controller.get(10L))
@@ -53,12 +55,12 @@ class ClientControllerTest {
     @Test
     void search_wrapsListIntoAppResponse() {
         List<ClientResponse> result = List.of(
-                new ClientResponse(1L, "Alice", "Smith", "+37060000002"),
-                new ClientResponse(2L, "Bob", "Smith", "+37060000003")
+                new ClientResponse(1L, "Alice", SMITH, "+37060000002"),
+                new ClientResponse(2L, "Bob", SMITH, "+37060000003")
         );
-        when(clientService.searchByNameOrSurname("Smith")).thenReturn(Mono.just(result));
+        when(clientService.searchByNameOrSurname(SMITH)).thenReturn(Mono.just(result));
 
-        StepVerifier.create(controller.search("Smith"))
+        StepVerifier.create(controller.search(SMITH))
                 .expectNext(AppResponse.ok(result))
                 .verifyComplete();
     }

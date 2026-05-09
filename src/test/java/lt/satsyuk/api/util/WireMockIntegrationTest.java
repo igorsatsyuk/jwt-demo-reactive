@@ -17,9 +17,10 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
     protected static final String RESOURCE_CLIENT_ID = "resource-server";
     protected static final String RESOURCE_CLIENT_SECRET = "resource-server-secret";
 
-    protected static final String TOKEN_PATH = "/realms/" + REALM + "/protocol/openid-connect/token";
-    protected static final String LOGOUT_PATH = "/realms/" + REALM + "/protocol/openid-connect/logout";
-    protected static final String INTROSPECT_PATH = "/realms/" + REALM + "/protocol/openid-connect/token/introspect";
+    protected static final String OPEN_ID_CONNECT = "/realms/" + REALM + "/protocol/openid-connect";
+    protected static final String TOKEN_PATH = OPEN_ID_CONNECT + "/token";
+    protected static final String LOGOUT_PATH = OPEN_ID_CONNECT + "/logout";
+    protected static final String INTROSPECT_PATH = OPEN_ID_CONNECT + "/token/introspect";
 
     protected static final WireMockServer wireMockServer = new WireMockServer(options().dynamicPort());
 
@@ -31,11 +32,15 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
         }, "wiremock-it-shutdown"));
     }
 
-    @DynamicPropertySource
-    static void wireMockProperties(DynamicPropertyRegistry registry) {
+    private static synchronized void ensureWireMockStarted() {
         if (!wireMockServer.isRunning()) {
             wireMockServer.start();
         }
+    }
+
+    @DynamicPropertySource
+    static void wireMockProperties(DynamicPropertyRegistry registry) {
+        ensureWireMockStarted();
 
         String baseUrl = wireMockServer.baseUrl();
         String tokenUrl = baseUrl + TOKEN_PATH;
@@ -56,9 +61,8 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setupWireMock() {
-        if (!wireMockServer.isRunning()) {
-            wireMockServer.start();
-        }
+        ensureWireMockStarted();
+
         wireMockServer.resetAll();
         configureFor("localhost", wireMockServer.port());
 
@@ -77,7 +81,5 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
                                 }
                                 """)));
     }
-
-
 }
 

@@ -116,7 +116,7 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
         AppResponse<AccountResponse> response = withRole("CLIENT_GET")
                 .get()
-                .uri("/api/accounts/client/{clientId}", account.getClientId())
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, account.getClientId())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new ParameterizedTypeReference<AppResponse<AccountResponse>>() {})

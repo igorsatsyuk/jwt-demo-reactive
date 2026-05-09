@@ -49,6 +49,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(OutputCaptureExtension.class)
 class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
+    protected static final String REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY = "Request worker transient DB error, retry ";
+    protected static final String REQUEST_WORKER_ITERATION_FAILED = "Request worker iteration failed";
     @Autowired
     private RequestService requestService;
 
@@ -128,10 +130,10 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     verify(clientService, never()).create(any(CreateClientRequest.class));
                     verify(requestRepository, never()).markCompleted(any(), anyString(), any());
                     verify(requestRepository, never()).markFailed(any(), anyString(), any());
-                    assertThat(output.getOut()).contains("Request worker transient DB error, retry 1/2");
-                    assertThat(output.getOut()).contains("Request worker transient DB error, retry 2/2");
-                    assertThat(TestTextUtils.countOccurrences(output.getOut(), "Request worker transient DB error, retry ")).isEqualTo(2);
-                    assertThat(output.getOut()).contains("Request worker iteration failed");
+                    assertThat(output.getOut()).contains(REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY + "1/2");
+                    assertThat(output.getOut()).contains(REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY + "2/2");
+                    assertThat(TestTextUtils.countOccurrences(output.getOut(), REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY)).isEqualTo(2);
+                    assertThat(output.getOut()).contains(REQUEST_WORKER_ITERATION_FAILED);
                 });
     }
 
@@ -158,7 +160,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     verify(clientService, never()).create(any(CreateClientRequest.class));
                     verify(requestRepository, never()).markCompleted(any(), anyString(), any());
                     verify(requestRepository, never()).markFailed(any(), anyString(), any());
-                    assertThat(output.getOut()).contains("Request worker iteration failed");
+                    assertThat(output.getOut()).contains(REQUEST_WORKER_ITERATION_FAILED);
                 });
     }
 

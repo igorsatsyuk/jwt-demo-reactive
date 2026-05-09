@@ -31,7 +31,7 @@ class AuthControllerIT extends AbstractIntegrationTest {
                 .thenReturn(Mono.error(new KeycloakAuthException("Login failed", HttpStatus.UNAUTHORIZED, "invalid_grant")));
 
         webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isUnauthorized()
@@ -43,7 +43,7 @@ class AuthControllerIT extends AbstractIntegrationTest {
     @Test
     void testLoginEndpointReturnsValidationErrorOnMissingFields() {
         webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of())
                 .exchange()
