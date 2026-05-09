@@ -60,6 +60,8 @@ class DpopAuthenticationWebFilterTest {
                 .verifyComplete();
 
         verify(chain).filter(exchange);
+        verify(validator, never()).validate(anyString(), anyString(), anyString(), anyString(), any());
+        verify(authEntryPoint, never()).commence(any(ServerWebExchange.class), any());
     }
 
     private void assertFilterValidatesAndContinuesChain(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication, java.util.function.Consumer<DpopProofValidator> validatorVerification) {
