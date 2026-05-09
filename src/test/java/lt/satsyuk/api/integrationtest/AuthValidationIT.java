@@ -12,14 +12,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuthValidationIT extends AbstractIntegrationTest {
 
     private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
-    protected static final String USERNAME_USER_PASSWORD_PASSWORD = "username=user&password=password";
+    protected static final String LOGIN_FORM_BODY = "username=user&password=password";
 
     @Test
     void login_unsupported_media_type_includes_optional_trace_id_header() {
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.post()
                 .uri(API_AUTH_LOGIN)
                 .contentType(MediaType.TEXT_PLAIN)
-                .bodyValue(USERNAME_USER_PASSWORD_PASSWORD)
+                .bodyValue(LOGIN_FORM_BODY)
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
@@ -40,7 +40,7 @@ class AuthValidationIT extends AbstractIntegrationTest {
         AppResponse<Void> body = webTestClient.post()
                 .uri(API_AUTH_LOGIN)
                 .contentType(MediaType.TEXT_PLAIN)
-                .bodyValue(USERNAME_USER_PASSWORD_PASSWORD)
+                .bodyValue(LOGIN_FORM_BODY)
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})

@@ -46,10 +46,6 @@ class DpopAuthenticationWebFilterTest {
     }
 
     private void assertFilterPassesThroughWithoutDpopValidation(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication) {
-        assertFilterPassesThroughWithoutDpopValidation(propertiesEnabled, method, uri, authorization, dpopProof, authentication, null);
-    }
-
-    private void assertFilterPassesThroughWithoutDpopValidation(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication, java.util.function.Consumer<DpopProofValidator> validatorVerification) {
         properties.setEnabled(propertiesEnabled);
         WebFilterChain chain = mock(WebFilterChain.class);
         MockServerWebExchange exchange = exchange(method, uri, authorization, dpopProof);
@@ -64,9 +60,24 @@ class DpopAuthenticationWebFilterTest {
                 .verifyComplete();
 
         verify(chain).filter(exchange);
-        if (validatorVerification != null) {
-            validatorVerification.accept(validator);
+    }
+
+    private void assertFilterValidatesAndContinuesChain(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication, java.util.function.Consumer<DpopProofValidator> validatorVerification) {
+        properties.setEnabled(propertiesEnabled);
+        WebFilterChain chain = mock(WebFilterChain.class);
+        MockServerWebExchange exchange = exchange(method, uri, authorization, dpopProof);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        var filterMono = filter.filter(exchange, chain);
+        if (authentication != null) {
+            filterMono = filterMono.contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
         }
+
+        StepVerifier.create(filterMono)
+                .verifyComplete();
+
+        verify(chain).filter(exchange);
+        validatorVerification.accept(validator);
     }
 
     private void assertFilterRejectsWithUnauthorized(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication) {
@@ -130,7 +141,7 @@ class DpopAuthenticationWebFilterTest {
 
     @Test
     void filter_validatesProofAndContinuesChain() {
-        assertFilterPassesThroughWithoutDpopValidation(
+        assertFilterValidatesAndContinuesChain(
             true,
             HttpMethod.POST,
             "https://api.example.com/resource?q=1",

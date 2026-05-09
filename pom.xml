@@ -333,7 +333,7 @@
 				<excludes>
 					<exclude>**/*IT*.java</exclude>
 				</excludes>
-				<argLine>${surefireArgLine}</argLine>
+				<argLine>@{surefireArgLine}</argLine>
 			</configuration>
 		</plugin>
 		<plugin>
@@ -341,7 +341,7 @@
 			<artifactId>maven-failsafe-plugin</artifactId>
 			<version>${maven-failsafe-plugin.version}</version>
 			<configuration>
-				<argLine>${failsafeArgLine}</argLine>
+				<argLine>@{failsafeArgLine}</argLine>
 				<includes>
 					<include>**/*IT*.java</include>
 				</includes>
