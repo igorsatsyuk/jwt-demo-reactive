@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.config.DpopProperties;
+import lt.satsyuk.exception.DpopProofValidationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.Authentication;

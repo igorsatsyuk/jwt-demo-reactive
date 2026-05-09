@@ -9,6 +9,7 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.config.DpopProperties;
+import lt.satsyuk.exception.DpopProofValidationException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

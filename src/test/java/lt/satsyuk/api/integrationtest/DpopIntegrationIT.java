@@ -80,7 +80,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                 """)));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result = webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .header(DPOP_HEADER, proof)
                 .bodyValue(new LoginRequest("user", "password", "test-client", "test-secret"))
                 .exchange()
@@ -112,7 +112,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                 """)));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result = webTestClient.post()
-                .uri("/api/auth/refresh")
+                .uri(API_AUTH_REFRESH)
                 .header(DPOP_HEADER, proof)
                 .bodyValue(new RefreshRequest("refresh-token", "test-client", "test-secret"))
                 .exchange()
@@ -135,7 +135,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                 .willReturn(aResponse().withStatus(204)));
 
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.post()
-                .uri("/api/auth/logout")
+                .uri(API_AUTH_LOGOUT)
                 .header(DPOP_HEADER, proof)
                 .bodyValue(new LogoutRequest("refresh-token", "test-client", "test-secret"))
                 .exchange()
@@ -157,11 +157,11 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
         String jkt = key.toPublicJWK().computeThumbprint().toString();
         stubIntrospectionWithJkt(jkt);
 
-        String uri = absoluteUrl("/api/accounts/client/" + account.getClientId());
+        String uri = absoluteUrl(API_ACCOUNTS_CLIENT + account.getClientId());
         String proof = createProof(key, "GET", uri, accessToken, UUID.randomUUID().toString());
 
         EntityExchangeResult<AppResponse<AccountResponse>> result = webTestClient.get()
-                .uri("/api/accounts/client/{clientId}", account.getClientId())
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, account.getClientId())
                 .header(AUTHORIZATION, "DPoP " + accessToken)
                 .header(DPOP_HEADER, proof)
                 .exchange()
@@ -181,7 +181,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
         stubIntrospectionWithJkt(randomJkt());
 
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
-                .uri("/api/accounts/client/{clientId}", account.getClientId())
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, account.getClientId())
                 .header(AUTHORIZATION, "DPoP bound-access-token")
                 .exchange()
                 .expectStatus().isUnauthorized()
@@ -200,18 +200,18 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
         String jkt = key.toPublicJWK().computeThumbprint().toString();
         stubIntrospectionWithJkt(jkt);
 
-        String uri = absoluteUrl("/api/accounts/client/" + account.getClientId());
+        String uri = absoluteUrl(API_ACCOUNTS_CLIENT + account.getClientId());
         String proof = createProof(key, "GET", uri, accessToken, "replay-jti");
 
         webTestClient.get()
-                .uri("/api/accounts/client/{clientId}", account.getClientId())
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, account.getClientId())
                 .header(AUTHORIZATION, "DPoP " + accessToken)
                 .header(DPOP_HEADER, proof)
                 .exchange()
                 .expectStatus().isOk();
 
         EntityExchangeResult<AppResponse<Void>> replay = webTestClient.get()
-                .uri("/api/accounts/client/{clientId}", account.getClientId())
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, account.getClientId())
                 .header(AUTHORIZATION, "DPoP " + accessToken)
                 .header(DPOP_HEADER, proof)
                 .exchange()

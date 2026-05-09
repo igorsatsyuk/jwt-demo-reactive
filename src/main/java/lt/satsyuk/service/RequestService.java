@@ -20,7 +20,6 @@ import lt.satsyuk.repository.RequestRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.r2dbc.BadSqlGrammarException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -152,13 +151,11 @@ public class RequestService {
                         ex -> {
                             if (isRequestTableMissing(ex)) {
                                 log.debug("Request worker skipped: request table is not ready yet");
-                                return;
-                            }
-                            if (isConnectionClosedDuringShutdown(ex)) {
+                            } else if (isConnectionClosedDuringShutdown(ex)) {
                                 log.debug("Request worker stopped because DB connection is already closed");
-                                return;
+                            } else {
+                                log.error("Request worker iteration failed", ex);
                             }
-                            log.error("Request worker iteration failed", ex);
                         }
                 );
     }
@@ -316,12 +313,6 @@ public class RequestService {
     private boolean isRequestTableMissing(Throwable ex) {
         Throwable current = ex;
         while (current != null) {
-            if (current instanceof BadSqlGrammarException) {
-                String message = current.getMessage();
-                if (message != null && message.contains("relation \"request\" does not exist")) {
-                    return true;
-                }
-            }
             String message = current.getMessage();
             if (message != null && message.contains("relation \"request\" does not exist")) {
                 return true;

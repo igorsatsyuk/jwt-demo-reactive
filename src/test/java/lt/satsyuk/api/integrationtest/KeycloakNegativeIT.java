@@ -13,6 +13,11 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 class KeycloakNegativeIT extends WireMockIntegrationTest {
 
+    protected static final String USER = "user";
+    protected static final String PASSWORD = "password";
+    protected static final String TEST_CLIENT = "test-client";
+    protected static final String TEST_SECRET = "test-secret";
+
     @Test
     void login_keycloak_unavailable_500() {
         stubFor(post(urlEqualTo(TOKEN_PATH))
@@ -22,7 +27,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{\"error\":\"internal_server_error\"}")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "test-client", "test-secret");
+                loginExchange(USER, PASSWORD, TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 500, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -37,7 +42,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{}")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "test-client", "test-secret");
+                loginExchange(USER, PASSWORD, TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 500, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -51,7 +56,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("invalid-json")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "test-client", "test-secret");
+                loginExchange(USER, PASSWORD, TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 500, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -65,7 +70,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{\"error\":\"invalid_grant\",\"error_description\":\"Invalid user credentials\"}")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "wrongpassword", "test-client", "test-secret");
+                loginExchange(USER, "wrong-password", TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 401, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -79,7 +84,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{\"error\":\"invalid_client\",\"error_description\":\"Invalid client credentials\"}")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "wrong-client", "wrong-secret");
+                loginExchange(USER, PASSWORD, "wrong-client", "wrong-secret");
 
         assertErrorResult(result, 401, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_CLIENT);
     }
@@ -93,7 +98,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{\"error\":\"invalid_grant\"}")));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                refreshExchange("invalid-refresh-token", "test-client", "test-secret");
+                refreshExchange("invalid-refresh-token", TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 400, AppResponse.ErrorCode.INVALID_GRANT.getCode(), INVALID_GRANT);
     }
@@ -107,7 +112,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                         .withBody("{\"error\":\"invalid_grant\"}")));
 
         EntityExchangeResult<AppResponse<Void>> result =
-                logoutExchange("invalid-token", "test-client", "test-secret");
+                logoutExchange("invalid-token", TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 400, AppResponse.ErrorCode.INVALID_TOKEN.getCode(), INVALID_GRANT);
     }
@@ -118,7 +123,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "test-client", "test-secret");
+                loginExchange(USER, PASSWORD, TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 500, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }
@@ -129,7 +134,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
                 .willReturn(aResponse().withStatus(204)));
 
         EntityExchangeResult<AppResponse<KeycloakTokenResponse>> result =
-                loginExchange("user", "password", "test-client", "test-secret");
+                loginExchange(USER, PASSWORD, TEST_CLIENT, TEST_SECRET);
 
         assertErrorResult(result, 400, AppResponse.ErrorCode.UNAUTHORIZED.getCode(), INVALID_GRANT);
     }

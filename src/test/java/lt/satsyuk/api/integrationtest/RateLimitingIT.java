@@ -151,7 +151,7 @@ class RateLimitingIT extends WireMockIntegrationTest {
 
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec doLogin(String language) {
         return webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .header(ACCEPT_LANGUAGE, language)
                 .bodyValue(new LoginRequest(USERNAME, USER_PASSWORD, "test-client", "test-secret"))
                 .exchange();
@@ -159,7 +159,7 @@ class RateLimitingIT extends WireMockIntegrationTest {
 
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec requestClients(String token) {
         return webTestClient.get()
-                .uri("/api/clients/not-a-number")
+                .uri(API_CLIENTS + "/not-a-number")
                 .header(AUTHORIZATION, "Bearer " + token)
                 .exchange();
     }

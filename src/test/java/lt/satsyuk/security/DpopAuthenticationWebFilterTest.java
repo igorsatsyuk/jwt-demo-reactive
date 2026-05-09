@@ -3,6 +3,7 @@ package lt.satsyuk.security;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.config.DpopProperties;
+import lt.satsyuk.exception.DpopProofValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -40,63 +41,93 @@ class DpopAuthenticationWebFilterTest {
 
     private final DpopAuthenticationWebFilter filter = new DpopAuthenticationWebFilter(properties, validator, authEntryPoint, meterRegistry);
 
-    @Test
-    void filter_skipsValidationWhenDpopDisabled() {
-        properties.setEnabled(false);
+    private void assertFilterPassesThroughWithoutDpopValidation(boolean propertiesEnabled) {
+        assertFilterPassesThroughWithoutDpopValidation(propertiesEnabled, HttpMethod.GET, "https://api.example.com/resource", null, null, null);
+    }
+
+    private void assertFilterPassesThroughWithoutDpopValidation(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication) {
+        properties.setEnabled(propertiesEnabled);
         WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", null, null);
+        MockServerWebExchange exchange = exchange(method, uri, authorization, dpopProof);
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
-        StepVerifier.create(filter.filter(exchange, chain))
+        var filterMono = filter.filter(exchange, chain);
+        if (authentication != null) {
+            filterMono = filterMono.contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+        }
+
+        StepVerifier.create(filterMono)
                 .verifyComplete();
 
         verify(chain).filter(exchange);
+        verify(validator, never()).validate(anyString(), anyString(), anyString(), anyString(), any());
+        verify(authEntryPoint, never()).commence(any(ServerWebExchange.class), any());
+    }
+
+    private void assertFilterValidatesAndContinuesChain(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication, java.util.function.Consumer<DpopProofValidator> validatorVerification) {
+        properties.setEnabled(propertiesEnabled);
+        WebFilterChain chain = mock(WebFilterChain.class);
+        MockServerWebExchange exchange = exchange(method, uri, authorization, dpopProof);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        var filterMono = filter.filter(exchange, chain);
+        if (authentication != null) {
+            filterMono = filterMono.contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+        }
+
+        StepVerifier.create(filterMono)
+                .verifyComplete();
+
+        verify(chain).filter(exchange);
+        validatorVerification.accept(validator);
+    }
+
+    private void assertFilterRejectsWithUnauthorized(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication) {
+        assertFilterRejectsWithUnauthorized(propertiesEnabled, method, uri, authorization, dpopProof, authentication, null);
+    }
+
+    private void assertFilterRejectsWithUnauthorized(boolean propertiesEnabled, HttpMethod method, String uri, String authorization, String dpopProof, Authentication authentication, java.util.function.Consumer<DpopProofValidator> validatorSetup) {
+        properties.setEnabled(propertiesEnabled);
+        WebFilterChain chain = mock(WebFilterChain.class);
+        MockServerWebExchange exchange = exchange(method, uri, authorization, dpopProof);
+        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
+
+        if (validatorSetup != null) {
+            validatorSetup.accept(validator);
+        }
+
+        var filterMono = filter.filter(exchange, chain);
+        if (authentication != null) {
+            filterMono = filterMono.contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+        }
+
+        StepVerifier.create(filterMono)
+                .verifyComplete();
+
+        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
+        verify(chain, never()).filter(exchange);
+    }
+
+    @Test
+    void filter_skipsValidationWhenDpopDisabled() {
+        assertFilterPassesThroughWithoutDpopValidation(false);
         verify(validator, never()).validate(anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void filter_skipsWhenNoAuthenticationInContext() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", null, null);
-        when(chain.filter(exchange)).thenReturn(Mono.empty());
-
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
-
-        verify(chain).filter(exchange);
+        assertFilterPassesThroughWithoutDpopValidation(true);
     }
 
     @Test
     void filter_skipsWhenRequestDoesNotUseDpopAndTokenNotBound() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "Bearer token", null);
-        Authentication auth = jwtAuthWithoutCnf();
-        when(chain.filter(exchange)).thenReturn(Mono.empty());
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(chain).filter(exchange);
+        assertFilterPassesThroughWithoutDpopValidation(true, HttpMethod.GET, "https://api.example.com/resource", "Bearer token", null, jwtAuthWithoutCnf());
         verify(validator, never()).validate(anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void filter_returnsUnauthorizedWhenDpopSchemeMissingButProofProvided() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "Bearer token", "proof");
-        Authentication auth = jwtAuthWithoutCnf();
-        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
-        verify(chain, never()).filter(exchange);
+        assertFilterRejectsWithUnauthorized(true, HttpMethod.GET, "https://api.example.com/resource", "Bearer token", "proof", jwtAuthWithoutCnf());
         assertThat(
                 meterRegistry.counter("security.dpop.rejected", "reason", "scheme_required").count()
         ).isEqualTo(1.0d);
@@ -104,18 +135,7 @@ class DpopAuthenticationWebFilterTest {
 
     @Test
     void filter_returnsUnauthorizedWhenProofMissingForDpopScheme() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "DPoP token", null);
-        Authentication auth = jwtAuthWithoutCnf();
-        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
-        verify(chain, never()).filter(exchange);
+        assertFilterRejectsWithUnauthorized(true, HttpMethod.GET, "https://api.example.com/resource", "DPoP token", null, jwtAuthWithoutCnf());
         assertThat(
                 meterRegistry.counter("security.dpop.rejected", "reason", "proof_missing").count()
         ).isEqualTo(1.0d);
@@ -123,38 +143,30 @@ class DpopAuthenticationWebFilterTest {
 
     @Test
     void filter_validatesProofAndContinuesChain() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.POST, "https://api.example.com/resource?q=1", "DPoP jwt-token", "proof");
-        Authentication auth = jwtAuthWithCnf();
-        when(chain.filter(exchange)).thenReturn(Mono.empty());
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(validator).validate("POST", "https://api.example.com/resource?q=1", "jwt-token", "proof", "thumbprint");
-        verify(chain).filter(exchange);
+        assertFilterValidatesAndContinuesChain(
+            true,
+            HttpMethod.POST,
+            "https://api.example.com/resource?q=1",
+            "DPoP jwt-token",
+            "proof",
+            jwtAuthWithCnf(),
+            v -> verify(v).validate("POST", "https://api.example.com/resource?q=1", "jwt-token", "proof", "thumbprint")
+        );
     }
 
     @Test
     void filter_returnsUnauthorizedWhenValidatorThrows() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "DPoP jwt-token", "proof");
-        Authentication auth = jwtAuthWithoutCnf();
-
-        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-        doThrow(new DpopProofValidationException("bad proof"))
-                .when(validator)
-                .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null);
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
-        verify(chain, never()).filter(exchange);
+        assertFilterRejectsWithUnauthorized(
+            true,
+            HttpMethod.GET,
+            "https://api.example.com/resource",
+            "DPoP jwt-token",
+            "proof",
+            jwtAuthWithoutCnf(),
+            v -> doThrow(new DpopProofValidationException("bad proof"))
+                    .when(v)
+                    .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null)
+        );
         assertThat(
                 meterRegistry.counter("security.dpop.rejected", "reason", "validation_failed").count()
         ).isEqualTo(1.0d);
@@ -162,22 +174,19 @@ class DpopAuthenticationWebFilterTest {
 
     @Test
     void filter_handlesUnsupportedAuthenticationByFailingDpopValidation() {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "DPoP token", "proof");
-        Authentication auth = new TestingAuthenticationToken("user", "password");
+        TestingAuthenticationToken auth = new TestingAuthenticationToken("user", "password");
         auth.setAuthenticated(true);
-
-        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-        doThrow(new DpopProofValidationException("Access token is missing for DPoP validation"))
-                .when(validator)
-                .validate("GET", "https://api.example.com/resource", null, "proof", null);
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
-        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
+        assertFilterRejectsWithUnauthorized(
+            true,
+            HttpMethod.GET,
+            "https://api.example.com/resource",
+            "DPoP token",
+            "proof",
+            auth,
+            v -> doThrow(new DpopProofValidationException("Access token is missing for DPoP validation"))
+                    .when(v)
+                    .validate("GET", "https://api.example.com/resource", null, "proof", null)
+        );
     }
 
     @Test
@@ -221,23 +230,18 @@ class DpopAuthenticationWebFilterTest {
     }
 
     private void assertMappedReason(String validatorMessage, String expectedReason) {
-        properties.setEnabled(true);
-        WebFilterChain chain = mock(WebFilterChain.class);
-        MockServerWebExchange exchange = exchange(HttpMethod.GET, "https://api.example.com/resource", "DPoP jwt-token", "proof");
-        Authentication auth = jwtAuthWithoutCnf();
-
-        when(authEntryPoint.commence(any(), any())).thenReturn(Mono.empty());
-        doThrow(new DpopProofValidationException(validatorMessage))
-                .when(validator)
-                .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null);
-
-        StepVerifier.create(filter.filter(exchange, chain)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
-                .verifyComplete();
-
+        assertFilterRejectsWithUnauthorized(
+            true,
+            HttpMethod.GET,
+            "https://api.example.com/resource",
+            "DPoP jwt-token",
+            "proof",
+            jwtAuthWithoutCnf(),
+            v -> doThrow(new DpopProofValidationException(validatorMessage))
+                    .when(v)
+                    .validate("GET", "https://api.example.com/resource", "jwt-token", "proof", null)
+        );
         assertThat(meterRegistry.counter("security.dpop.rejected", "reason", expectedReason).count()).isEqualTo(1.0d);
-        verify(authEntryPoint).commence(any(ServerWebExchange.class), any());
-        verify(chain, never()).filter(exchange);
     }
 
     private static MockServerWebExchange exchange(HttpMethod method, String uri, String authorization, String dpopProof) {

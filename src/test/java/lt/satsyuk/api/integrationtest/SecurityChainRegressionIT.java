@@ -4,6 +4,7 @@ import lt.satsyuk.api.util.WireMockIntegrationTest;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.KeycloakTokenResponse;
 import lt.satsyuk.dto.LoginRequest;
+import lt.satsyuk.exception.DpopProofValidationException;
 import lt.satsyuk.security.DpopProofValidator;
 import lt.satsyuk.security.RateLimitingWebFilter;
 import lt.satsyuk.security.TraceIdResponseHeaderWebFilter;
@@ -88,7 +89,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
 
         webTestClient.get()
-                .uri("/api/accounts/client/999999")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 999999)
                 .header(AUTHORIZATION, "DPoP dpop-token")
                 .header("DPoP", "proof-1")
                 .exchange()
@@ -106,12 +107,12 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     @Test
     void prometheus_exposes_dpop_rejected_reason_metrics() {
         stubIntrospectionWithBoundToken("dpop-token", "expected-jkt");
-        doThrow(new lt.satsyuk.security.DpopProofValidationException("DPoP proof replay detected"))
+        doThrow(new DpopProofValidationException("DPoP proof replay detected"))
                 .when(dpopProofValidator)
                 .validate(anyString(), anyString(), anyString(), anyString(), any());
 
         webTestClient.get()
-                .uri("/api/accounts/client/999999")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 999999)
                 .header(AUTHORIZATION, "DPoP dpop-token")
                 .header("DPoP", "proof-replay")
                 .exchange()
@@ -134,7 +135,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     @Test
     void unauthorized_short_circuit_response_contains_optional_trace_id_header() {
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
-                .uri("/api/accounts/client/1")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 1)
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
@@ -164,7 +165,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
         stubIntrospectionWithoutRoles("no-role-token");
 
         EntityExchangeResult<AppResponse<Void>> result = webTestClient.get()
-                .uri("/api/accounts/client/1")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 1)
                 .header(AUTHORIZATION, "Bearer no-role-token")
                 .exchange()
                 .expectStatus().isForbidden()
@@ -181,13 +182,13 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
     @Test
     void prometheus_exposes_security_http_response_metrics() {
         webTestClient.get()
-                .uri("/api/accounts/client/1")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 1)
                 .exchange()
                 .expectStatus().isUnauthorized();
 
         stubIntrospectionWithoutRoles("no-role-token");
         webTestClient.get()
-                .uri("/api/accounts/client/1")
+                .uri(API_ACCOUNTS_BY_CLIENT_ID, 1)
                 .header(AUTHORIZATION, "Bearer no-role-token")
                 .exchange()
                 .expectStatus().isForbidden();
@@ -220,7 +221,7 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
     private org.springframework.test.web.reactive.server.WebTestClient.ResponseSpec login() {
         return webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .bodyValue(new LoginRequest(USERNAME, USER_PASSWORD, "test-client", "test-secret"))
                 .exchange();
     }

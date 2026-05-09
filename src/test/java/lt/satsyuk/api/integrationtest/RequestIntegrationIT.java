@@ -36,6 +36,11 @@ import static org.mockito.Mockito.when;
 
 class RequestIntegrationIT extends AbstractIntegrationTest {
 
+    protected static final String DOE = "Doe";
+    protected static final String JOHN = "John";
+    protected static final String CLIENT_CREATE_ROLE = "CLIENT_CREATE";
+    protected static final String CLIENT_GET_ROLE = "CLIENT_GET";
+    protected static final String JANE = "Jane";
     @Autowired
     private ClientRepository clientRepository;
 
@@ -58,11 +63,11 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void create_client_request_is_processed_by_scheduler_and_completes() {
-        CreateClientRequest payload = new CreateClientRequest("John", "Doe", "+37069990001");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990001");
 
-        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
-                .uri("/api/clients")
+                .uri(API_CLIENTS)
                 .bodyValue(payload)
                 .exchange()
                 .expectStatus().isAccepted()
@@ -100,18 +105,18 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     @Test
     void create_client_request_duplicate_phone_becomes_failed_with_conflict_payload() {
         clientRepository.save(Client.builder()
-                        .firstName("Jane")
+                        .firstName(JANE)
                         .lastName("Roe")
                         .phone("+37069990002")
                         .build())
                 .blockOptional()
                 .orElseThrow();
 
-        CreateClientRequest payload = new CreateClientRequest("John", "Doe", "+37069990002");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990002");
 
-        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
-                .uri("/api/clients")
+                .uri(API_CLIENTS)
                 .bodyValue(payload)
                 .exchange()
                 .expectStatus().isAccepted()
@@ -137,9 +142,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     void get_request_status_not_found_returns_404() {
         UUID unknownId = UUID.randomUUID();
 
-        AppResponse<Void> response = withRole("CLIENT_CREATE")
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
                 .get()
-                .uri("/api/requests/{id}", unknownId)
+                .uri(API_REQUESTS_ID, unknownId)
                 .exchange()
                 .expectStatus().isNotFound()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
@@ -154,9 +159,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void get_request_status_invalid_uuid_returns_400() {
-        AppResponse<Void> response = withRole("CLIENT_CREATE")
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
                 .get()
-                .uri("/api/requests/not-a-uuid")
+                .uri(API_REQUESTS_ID, "not-a-uuid")
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
@@ -171,10 +176,10 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void get_request_status_without_required_role_returns_403() {
-        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
-                .uri("/api/clients")
-                .bodyValue(new CreateClientRequest("Jane", "Doe", "+37069990003"))
+                .uri(API_CLIENTS)
+                .bodyValue(new CreateClientRequest(JANE, DOE, "+37069990003"))
                 .exchange()
                 .expectStatus().isAccepted()
                 .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {
@@ -185,9 +190,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         assertThat(accepted).isNotNull();
 
-        AppResponse<Void> response = withRole("CLIENT_GET")
+        AppResponse<Void> response = withRole(CLIENT_GET_ROLE)
                 .get()
-                .uri("/api/requests/{id}", accepted.requestId())
+                .uri(API_REQUESTS_ID, accepted.requestId())
                 .exchange()
                 .expectStatus().isForbidden()
                 .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
@@ -204,10 +209,10 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void get_request_status_is_idempotent_after_terminal_state() {
-        CreateClientRequest payload = new CreateClientRequest("John", "Idempotent", "+37069990004");
-        RequestAcceptedResponse accepted = withRole("CLIENT_CREATE")
+        CreateClientRequest payload = new CreateClientRequest(JOHN, "Idempotent", "+37069990004");
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
-                .uri("/api/clients")
+                .uri(API_CLIENTS)
                 .bodyValue(payload)
                 .exchange()
                 .expectStatus().isAccepted()
@@ -239,9 +244,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
                 .atMost(10, TimeUnit.SECONDS)
                 .pollInterval(100, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> {
-                    RequestStatusResponse current = withRole("CLIENT_CREATE")
+                    RequestStatusResponse current = withRole(CLIENT_CREATE_ROLE)
                             .get()
-                            .uri("/api/requests/{id}", requestId)
+                            .uri(API_REQUESTS_ID, requestId)
                             .exchange()
                             .expectStatus().isOk()
                             .expectBody(new ParameterizedTypeReference<AppResponse<RequestStatusResponse>>() {})
@@ -259,9 +264,9 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     private RequestStatusResponse getRequestStatus(UUID requestId) {
-        AppResponse<RequestStatusResponse> response = withRole("CLIENT_CREATE")
+        AppResponse<RequestStatusResponse> response = withRole(CLIENT_CREATE_ROLE)
                 .get()
-                .uri("/api/requests/{id}", requestId)
+                .uri(API_REQUESTS_ID, requestId)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.OK)
                 .expectBody(new ParameterizedTypeReference<AppResponse<RequestStatusResponse>>() {

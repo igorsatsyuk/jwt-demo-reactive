@@ -36,6 +36,14 @@ public abstract class AbstractIntegrationTest {
     protected static final String CLIENT_SECRET   = "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab";
     protected static final String INVALID_GRANT   = "invalid_grant";
     protected static final String INVALID_CLIENT  = "invalid_client";
+    protected static final String API_AUTH_LOGIN = "/api/auth/login";
+    protected static final String API_AUTH_REFRESH = "/api/auth/refresh";
+    protected static final String API_AUTH_LOGOUT = "/api/auth/logout";
+    protected static final String API_ACCOUNTS_CLIENT = "/api/accounts/client/";
+    protected static final String API_ACCOUNTS_BY_CLIENT_ID = API_ACCOUNTS_CLIENT + "{clientId}";
+    protected static final String API_CLIENTS = "/api/clients";
+    protected static final String API_REQUESTS_ID = "/api/requests/{id}";
+
 
     // -------------------------------------------------------------------------
     // POSTGRES TESTCONTAINER
@@ -97,7 +105,7 @@ public abstract class AbstractIntegrationTest {
     protected EntityExchangeResult<AppResponse<KeycloakTokenResponse>> loginExchange(
             String username, String password, String clientId, String clientSecret) {
         return webTestClient.post()
-                .uri("/api/auth/login")
+                .uri(API_AUTH_LOGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new LoginRequest(username, password, clientId, clientSecret))
                 .exchange()
@@ -108,6 +116,13 @@ public abstract class AbstractIntegrationTest {
     protected EntityExchangeResult<AppResponse<KeycloakTokenResponse>> loginExchange(
             String username, String password) {
         return loginExchange(username, password, CLIENT_ID, CLIENT_SECRET);
+    }
+
+    protected void loginAndAssertOk(String username, String password) {
+        KeycloakTokenResponse data = loginAndGetData(username, password);
+        assertThat(data).isNotNull();
+        assertThat(data.getAccessToken()).isNotBlank();
+        assertThat(data.getRefreshToken()).isNotBlank();
     }
 
     /** POST /api/auth/login — asserts 200 and returns the token payload. */
@@ -127,7 +142,7 @@ public abstract class AbstractIntegrationTest {
     protected EntityExchangeResult<AppResponse<KeycloakTokenResponse>> refreshExchange(
             String refreshToken, String clientId, String clientSecret) {
         return webTestClient.post()
-                .uri("/api/auth/refresh")
+                .uri(API_AUTH_REFRESH)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new RefreshRequest(refreshToken, clientId, clientSecret))
                 .exchange()
@@ -139,7 +154,7 @@ public abstract class AbstractIntegrationTest {
     protected EntityExchangeResult<AppResponse<Void>> logoutExchange(
             String refreshToken, String clientId, String clientSecret) {
         return webTestClient.post()
-                .uri("/api/auth/logout")
+                .uri(API_AUTH_LOGOUT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new LogoutRequest(refreshToken, clientId, clientSecret))
                 .exchange()
