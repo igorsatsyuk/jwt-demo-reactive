@@ -56,8 +56,12 @@ class SecurityChainRegressionIT extends WireMockIntegrationTest {
 
     private static final String TRACE_ID_REGEX = "(?i)^[0-9a-f]{32}$";
 
+    private final RateLimitingWebFilter rateLimitingWebFilter;
+
     @Autowired
-    private RateLimitingWebFilter rateLimitingWebFilter;
+    SecurityChainRegressionIT(RateLimitingWebFilter rateLimitingWebFilter) {
+        this.rateLimitingWebFilter = rateLimitingWebFilter;
+    }
 
     @MockitoBean
     private DpopProofValidator dpopProofValidator;

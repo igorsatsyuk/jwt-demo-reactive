@@ -51,11 +51,14 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
     protected static final String REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY = "Request worker transient DB error, retry ";
     protected static final String REQUEST_WORKER_ITERATION_FAILED = "Request worker iteration failed";
-    @Autowired
-    private RequestService requestService;
+    private final RequestService requestService;
+    private final ObjectMapper objectMapper;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    RequestWorkerRetryIT(RequestService requestService, ObjectMapper objectMapper) {
+        this.requestService = requestService;
+        this.objectMapper = objectMapper;
+    }
 
     @MockitoBean
     private RequestRepository requestRepository;

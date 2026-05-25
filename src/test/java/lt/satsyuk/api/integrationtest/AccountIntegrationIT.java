@@ -47,11 +47,14 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     private static final int PESSIMISTIC_SCENARIO_MAX_ATTEMPTS = 3;
     private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(10);
 
-    @Autowired
-    private AccountRepository accountRepository;
+    private final AccountRepository accountRepository;
+    private final ClientRepository clientRepository;
 
     @Autowired
-    private ClientRepository clientRepository;
+    AccountIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository) {
+        this.accountRepository = accountRepository;
+        this.clientRepository = clientRepository;
+    }
 
     @MockitoBean
     private ReactiveOpaqueTokenIntrospector opaqueTokenIntrospector;

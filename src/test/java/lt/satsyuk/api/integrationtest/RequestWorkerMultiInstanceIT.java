@@ -37,20 +37,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
 
-    @Autowired
-    private RequestService requestService;
+    private final RequestService requestService;
+    private final RequestRepository requestRepository;
+    private final ClientRepository clientRepository;
+    private final AccountRepository accountRepository;
+    private final DatabaseClient databaseClient;
 
     @Autowired
-    private RequestRepository requestRepository;
-
-    @Autowired
-    private ClientRepository clientRepository;
-
-    @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
-    private DatabaseClient databaseClient;
+    RequestWorkerMultiInstanceIT(
+            RequestService requestService,
+            RequestRepository requestRepository,
+            ClientRepository clientRepository,
+            AccountRepository accountRepository,
+            DatabaseClient databaseClient
+    ) {
+        this.requestService = requestService;
+        this.requestRepository = requestRepository;
+        this.clientRepository = clientRepository;
+        this.accountRepository = accountRepository;
+        this.databaseClient = databaseClient;
+    }
 
     private ConfigurableApplicationContext secondInstance;
 

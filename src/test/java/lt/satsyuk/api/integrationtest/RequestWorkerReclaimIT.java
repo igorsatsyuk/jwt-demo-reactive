@@ -30,20 +30,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class RequestWorkerReclaimIT extends AbstractIntegrationTest {
 
-    @Autowired
-    private RequestService requestService;
+    private final RequestService requestService;
+    private final RequestRepository requestRepository;
+    private final ClientRepository clientRepository;
+    private final AccountRepository accountRepository;
+    private final ObjectMapper objectMapper;
 
     @Autowired
-    private RequestRepository requestRepository;
-
-    @Autowired
-    private ClientRepository clientRepository;
-
-    @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    RequestWorkerReclaimIT(
+            RequestService requestService,
+            RequestRepository requestRepository,
+            ClientRepository clientRepository,
+            AccountRepository accountRepository,
+            ObjectMapper objectMapper
+    ) {
+        this.requestService = requestService;
+        this.requestRepository = requestRepository;
+        this.clientRepository = clientRepository;
+        this.accountRepository = accountRepository;
+        this.objectMapper = objectMapper;
+    }
 
     @BeforeEach
     void setUp() {
