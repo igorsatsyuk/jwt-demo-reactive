@@ -49,11 +49,14 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 })
 class RateLimitingIT extends WireMockIntegrationTest {
 
-    @Autowired
-    private RateLimitingWebFilter rateLimitingWebFilter;
+    private final RateLimitingWebFilter rateLimitingWebFilter;
+    private final RateLimitProperties rateLimitProperties;
 
     @Autowired
-    private RateLimitProperties rateLimitProperties;
+    RateLimitingIT(RateLimitingWebFilter rateLimitingWebFilter, RateLimitProperties rateLimitProperties) {
+        this.rateLimitingWebFilter = rateLimitingWebFilter;
+        this.rateLimitProperties = rateLimitProperties;
+    }
 
     @BeforeEach
     void clearRateLimitBuckets() {

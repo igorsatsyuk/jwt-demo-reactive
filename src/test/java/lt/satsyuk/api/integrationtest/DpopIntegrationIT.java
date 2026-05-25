@@ -49,11 +49,14 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private static final String DPOP_HEADER = "DPoP";
 
-    @Autowired
-    private AccountRepository accountRepository;
+    private final AccountRepository accountRepository;
+    private final ClientRepository clientRepository;
 
     @Autowired
-    private ClientRepository clientRepository;
+    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository) {
+        this.accountRepository = accountRepository;
+        this.clientRepository = clientRepository;
+    }
 
     @BeforeEach
     void setUpData() {

@@ -41,14 +41,20 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     protected static final String CLIENT_CREATE_ROLE = "CLIENT_CREATE";
     protected static final String CLIENT_GET_ROLE = "CLIENT_GET";
     protected static final String JANE = "Jane";
-    @Autowired
-    private ClientRepository clientRepository;
+    private final ClientRepository clientRepository;
+    private final AccountRepository accountRepository;
+    private final RequestRepository requestRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
-    private RequestRepository requestRepository;
+    RequestIntegrationIT(
+            ClientRepository clientRepository,
+            AccountRepository accountRepository,
+            RequestRepository requestRepository
+    ) {
+        this.clientRepository = clientRepository;
+        this.accountRepository = accountRepository;
+        this.requestRepository = requestRepository;
+    }
 
     @MockitoBean
     private ReactiveOpaqueTokenIntrospector opaqueTokenIntrospector;

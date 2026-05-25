@@ -45,6 +45,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         })
 class FlywayMigrationConfigIT {
 
+    private final ApplicationContext context;
+    private final Flyway flyway;
+
     // Container is not annotated with @Container / @Testcontainers — it is started explicitly
     // inside @DynamicPropertySource (same pattern as AbstractIntegrationTest) to guarantee
     // the container is running before Spring resolves property values from the suppliers.
@@ -74,10 +77,10 @@ class FlywayMigrationConfigIT {
     }
 
     @Autowired
-    ApplicationContext context;
-
-    @Autowired
-    Flyway flyway;
+    FlywayMigrationConfigIT(ApplicationContext context, Flyway flyway) {
+        this.context = context;
+        this.flyway = flyway;
+    }
 
     @Test
     void noDataSourceBeanExistsInPureR2dbcContext() {
