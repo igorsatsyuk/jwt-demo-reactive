@@ -3,8 +3,13 @@ param(
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$tempJar = Join-Path ([System.IO.Path]::GetTempPath()) "plantuml-$PlantUmlVersion.jar"
+$cacheDir = Join-Path $scriptDir ".plantuml-cache"
+$tempJar = Join-Path $cacheDir "plantuml-$PlantUmlVersion.jar"
 $downloadUrl = "https://github.com/plantuml/plantuml/releases/download/v$PlantUmlVersion/plantuml-$PlantUmlVersion.jar"
+
+if (-not (Test-Path $cacheDir)) {
+    New-Item -ItemType Directory -Path $cacheDir | Out-Null
+}
 
 if (-not (Test-Path $tempJar)) {
     Invoke-WebRequest -Uri $downloadUrl -OutFile $tempJar -ErrorAction Stop
