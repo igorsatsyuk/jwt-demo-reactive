@@ -29,7 +29,7 @@ jobs:
 
       - name: Upload backend JaCoCo report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: backend-jacoco-report
           path: target/site/jacoco-merged/jacoco.xml
@@ -85,7 +85,7 @@ jobs:
       - name: Download backend JaCoCo report
         if: steps.sonar-check.outputs.sonar_enabled == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: backend-jacoco-report
           path: coverage
@@ -194,7 +194,7 @@ jobs:
 
       - name: Notify Telegram
         if: ${{ env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
-        uses: appleboy/telegram-action@v1.0.1
+        uses: appleboy/telegram-action@221e6b684967abe813051ee4a37dd61770a83ad3 # v1.0.1
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
