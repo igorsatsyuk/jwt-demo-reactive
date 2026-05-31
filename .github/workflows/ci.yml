@@ -103,7 +103,10 @@ jobs:
           host_url="${SONAR_HOST_URL:-https://sonarcloud.io}"
           sonar_project_key="${SONAR_PROJECT_KEY:-$REPO_NAME}"
           report_path=""
-          found_report=$(find coverage -type f -name "jacoco.xml" | head -1 || true)
+          found_report=""
+          if [ -d "coverage" ]; then
+            found_report=$(find coverage -type f -name "jacoco.xml" | head -1 || true)
+          fi
           if [ -n "${found_report}" ]; then
             report_path="$(pwd)/${found_report}"
           fi

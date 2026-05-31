@@ -222,7 +222,7 @@ def main() -> int:
         conditions = project_status.get("conditions", [])
 
         measures = fetch_measures(host_url, args.project_key, token)
-    except RuntimeError as error:
+    except (RuntimeError, TimeoutError) as error:
         print(str(error), file=sys.stderr)
         return 1
 
