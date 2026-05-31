@@ -14,8 +14,8 @@ App -> OTel: OTLP traces\nmanagement.otlp.tracing.endpoint
 App -> OTel: OTLP logs\nmanagement.otlp.logging.endpoint
 OTel -> Tempo: export traces
 OTel -> Loki: export logs
-Prom -> Grafana: metrics datasource
-Tempo -> Grafana: traces datasource
-Loki -> Grafana: logs datasource
+Grafana -> Prom: query metrics datasource
+Grafana -> Tempo: query traces datasource
+Grafana -> Loki: query logs datasource
 
 @enduml

@@ -10,4 +10,9 @@ if (-not (Test-Path $tempJar)) {
     Invoke-WebRequest -Uri $downloadUrl -OutFile $tempJar -ErrorAction Stop
 }
 
-java -jar $tempJar -charset UTF-8 -tpng (Join-Path $scriptDir "*.puml")
+$pumlFiles = Get-ChildItem -Path $scriptDir -Filter "*.puml" | Select-Object -ExpandProperty FullName
+if (-not $pumlFiles) {
+    throw "No .puml files found in $scriptDir"
+}
+
+java -jar $tempJar -charset UTF-8 -tpng @pumlFiles
