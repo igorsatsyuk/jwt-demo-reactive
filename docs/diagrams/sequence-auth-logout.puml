@@ -1,0 +1,14 @@
+@startuml
+title Logout flow
+
+autonumber
+actor "Client" as C
+participant "jwt-demo-reactive\nAuthController" as S
+participant "Keycloak\nLogout endpoint" as K
+
+C -> S: POST /api/auth/logout\n{refreshToken, clientId, clientSecret}
+S -> K: client_id, client_secret,\nrefresh_token
+K --> S: 200 OK
+S --> C: AppResponse(code=0)
+
+@enduml

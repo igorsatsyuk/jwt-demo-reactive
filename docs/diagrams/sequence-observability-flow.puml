@@ -1,0 +1,21 @@
+@startuml
+title Observability data flow (OTLP-first)
+
+autonumber
+participant "Spring Boot app\njwt-demo-reactive" as App
+participant "Prometheus" as Prom
+participant "OTel Collector" as OTel
+participant "Tempo" as Tempo
+participant "Loki" as Loki
+participant "Grafana" as Grafana
+
+Prom -> App: pull /actuator/prometheus
+App -> OTel: OTLP traces\nmanagement.otlp.tracing.endpoint
+App -> OTel: OTLP logs\nmanagement.otlp.logging.endpoint
+OTel -> Tempo: export traces
+OTel -> Loki: export logs
+Prom -> Grafana: metrics datasource
+Tempo -> Grafana: traces datasource
+Loki -> Grafana: logs datasource
+
+@enduml

@@ -1,0 +1,14 @@
+@startuml
+title Refresh flow
+
+autonumber
+actor "Client" as C
+participant "jwt-demo-reactive\nAuthController" as S
+participant "Keycloak\nToken endpoint" as K
+
+C -> S: POST /api/auth/refresh\n{refreshToken, clientId, clientSecret}
+S -> K: grant_type=refresh_token\nrefresh_token\nclient_id, client_secret
+K --> S: 200 OK\n{new_access_token, new_refresh_token}
+S --> C: AppResponse(code=0, data=tokens)
+
+@enduml

@@ -1,0 +1,14 @@
+@startuml
+title Login flow
+
+autonumber
+actor "Client" as C
+participant "jwt-demo-reactive\nAuthController" as S
+participant "Keycloak\nToken endpoint" as K
+
+C -> S: POST /api/auth/login\n{username, password, clientId, clientSecret}
+S -> K: grant_type=password\nusername, password\nclient_id, client_secret
+K --> S: 200 OK\n{access_token, refresh_token}
+S --> C: AppResponse(code=0, data=tokens)
+
+@enduml
