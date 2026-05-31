@@ -5,7 +5,7 @@ Diagrams are stored in `docs/diagrams/` as PlantUML source and exported PNG file
 To regenerate PNG files:
 
 ```pwsh
-.\docs\diagrams\generate-diagrams.ps1
+./docs/diagrams/generate-diagrams.ps1
 ```
 
 ## Sequence: Login flow

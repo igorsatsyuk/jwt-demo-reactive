@@ -3,11 +3,11 @@ param(
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$tempJar = Join-Path $env:TEMP "plantuml-$PlantUmlVersion.jar"
+$tempJar = Join-Path ([System.IO.Path]::GetTempPath()) "plantuml-$PlantUmlVersion.jar"
 $downloadUrl = "https://github.com/plantuml/plantuml/releases/download/v$PlantUmlVersion/plantuml-$PlantUmlVersion.jar"
 
 if (-not (Test-Path $tempJar)) {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempJar
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempJar -ErrorAction Stop
 }
 
 java -jar $tempJar -charset UTF-8 -tpng (Join-Path $scriptDir "*.puml")
