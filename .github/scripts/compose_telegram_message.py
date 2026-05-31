@@ -6,7 +6,7 @@ SUCCESS_STATES = {"success", "skipped", "neutral"}
 
 JOB_RESULT_FIELDS = (
     ("backend", "BACKEND_RESULT"),
-    ("sonarqube-backend", "SONAR_BACKEND_RESULT"),
+    ("sonar-backend", "SONAR_BACKEND_RESULT"),
 )
 
 SONAR_SKIP_FLAGS = {
