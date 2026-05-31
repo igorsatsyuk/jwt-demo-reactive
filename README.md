@@ -8,6 +8,7 @@ Reactive OAuth2 proxy/service built with Spring Boot 4 + Java 25, using WebFlux,
 - `SECURITY.md` - security policy and runtime security model
 - `CONTRIBUTING.md` - contribution workflow and coding/testing standards
 - `CHANGELOG.md` - notable project changes
+- `docs/architecture.md` - architecture and sequence diagrams (PlantUML + PNG)
 
 This project keeps the same business scenarios as `jwt-demo`, but the implementation is fully reactive:
 - WebFlux controllers (`Mono<AppResponse<...>>`)
@@ -205,48 +206,21 @@ Authorization options:
 
 ### Login flow
 
-```mermaid
-sequenceDiagram
-    actor C as Client
-    participant S as Spring Boot (AuthController)
-    participant K as Keycloak
+![Login flow](docs/diagrams/sequence-auth-login.png)
 
-    C->>S: 1) POST /api/auth/login<br/>{username, password, clientId, clientSecret}
-    S->>K: 2) KeycloakReactiveAuthService.login()
-    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/token<br/>grant_type=password<br/>username, password<br/>client_id, client_secret
-    K-->>S: 4) 200 OK<br/>{access_token, refresh_token}
-    S-->>C: 5) AppResponse(code=0, data=tokens)
-```
+Source: `docs/diagrams/sequence-auth-login.puml`
 
 ### Refresh flow
 
-```mermaid
-sequenceDiagram
-    actor C as Client
-    participant S as Spring Boot (AuthController)
-    participant K as Keycloak
+![Refresh flow](docs/diagrams/sequence-auth-refresh.png)
 
-    C->>S: 1) POST /api/auth/refresh<br/>{refreshToken, clientId, clientSecret}
-    S->>K: 2) KeycloakReactiveAuthService.refresh()
-    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/token<br/>grant_type=refresh_token<br/>refresh_token<br/>client_id, client_secret
-    K-->>S: 4) 200 OK<br/>{new_access_token, new_refresh_token}
-    S-->>C: 5) AppResponse(code=0, data=tokens)
-```
+Source: `docs/diagrams/sequence-auth-refresh.puml`
 
 ### Logout flow
 
-```mermaid
-sequenceDiagram
-    actor C as Client
-    participant S as Spring Boot (AuthController)
-    participant K as Keycloak
+![Logout flow](docs/diagrams/sequence-auth-logout.png)
 
-    C->>S: 1) POST /api/auth/logout<br/>{refreshToken, clientId, clientSecret}
-    S->>K: 2) KeycloakReactiveAuthService.logout()
-    K->>K: 3) POST /realms/my-realm/protocol/openid-connect/logout<br/>client_id, client_secret<br/>refresh_token
-    K-->>S: 4) 200 OK (Keycloak behavior)
-    S-->>C: 5) AppResponse(code=0)
-```
+Source: `docs/diagrams/sequence-auth-logout.puml`
 
 ---
 
@@ -254,34 +228,9 @@ sequenceDiagram
 
 `POST /api/clients` does not create a client synchronously.
 
-```mermaid
-sequenceDiagram
-    actor C as Caller
-    participant A as API (/api/clients)
-    participant D as request table (PostgreSQL)
-    participant W as Request Worker
+![Asynchronous client creation flow](docs/diagrams/sequence-async-client-create.png)
 
-    C->>A: POST /api/clients
-    A->>A: Validate payload
-    A->>D: INSERT type=CLIENT_CREATE, status=PENDING
-    A-->>C: AppResponse(code=0, data={requestId})
-
-    loop Poll until terminal status
-        C->>A: GET /api/requests/{id}
-        A->>D: SELECT status by id
-        A-->>C: status=PENDING|PROCESSING|COMPLETED|FAILED
-    end
-
-    W->>D: Reclaim stale PROCESSING rows
-    W->>D: Claim PENDING batch (FOR UPDATE SKIP LOCKED)
-    W->>D: UPDATE status=PROCESSING
-
-    alt Success
-        W->>D: UPDATE status=COMPLETED, response_json
-    else Failure
-        W->>D: UPDATE status=FAILED, error_json
-    end
-```
+Source: `docs/diagrams/sequence-async-client-create.puml`
 
 For multi-instance safety, stale `PROCESSING` reclaim is implemented and indexed (`V2__add_request_reclaim_index.sql`).
 
@@ -345,32 +294,9 @@ Recommended settings:
 - `management.otlp.metrics.export.enabled=false`
 - `management.tracing.sampling.probability=1.0`
 
-```mermaid
-flowchart LR
-  subgraph App[Spring Boot jwt-demo-reactive]
-    A1[HTTP metrics\nActuator /prometheus]
-    A2[Traces OTLP\nmanagement.otlp.tracing.endpoint]
-    A3[Logs OTLP\nmanagement.otlp.logging.endpoint]
-  end
+![Observability data flow](docs/diagrams/sequence-observability-flow.png)
 
-  subgraph Infra[Observability Infra]
-    C[OTel Collector]
-    T[Tempo]
-    L[Loki]
-    P[Prometheus]
-    G[Grafana]
-  end
-
-  A1 -->|pull /actuator/prometheus| P
-  A2 -->|OTLP traces| C
-  A3 -->|OTLP logs| C
-  C -->|traces| T
-  C -->|logs| L
-
-  P --> G
-  T --> G
-  L --> G
-```
+Source: `docs/diagrams/sequence-observability-flow.puml`
 
 ---
 
@@ -472,4 +398,3 @@ Main integration suites:
 - This is the fastest path to diagnose `401`, `403`, and `429` scenarios across API + security filters.
 
 ---
-

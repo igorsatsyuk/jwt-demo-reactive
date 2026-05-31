@@ -1,0 +1,31 @@
+@startuml
+title Asynchronous client creation flow
+
+autonumber
+actor "Caller" as C
+participant "API\nPOST /api/clients" as A
+database "request table\n(PostgreSQL)" as D
+participant "Request Worker" as W
+
+C -> A: POST /api/clients
+A -> A: Validate payload
+A -> D: INSERT type=CLIENT_CREATE,\nstatus=PENDING
+A --> C: AppResponse(code=0,\ndata={requestId})
+
+loop Poll until terminal status
+  C -> A: GET /api/requests/{id}
+  A -> D: SELECT status by id
+  A --> C: status=PENDING|PROCESSING|COMPLETED|FAILED
+end
+
+W -> D: Reclaim stale PROCESSING rows
+W -> D: Claim PENDING batch\n(FOR UPDATE SKIP LOCKED)
+W -> D: UPDATE status=PROCESSING
+
+alt Success
+  W -> D: UPDATE status=COMPLETED,\nresponse_json
+else Failure
+  W -> D: UPDATE status=FAILED,\nerror_json
+end
+
+@enduml
