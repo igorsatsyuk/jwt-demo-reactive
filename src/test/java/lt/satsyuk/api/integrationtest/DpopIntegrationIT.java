@@ -48,6 +48,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private static final String DPOP_HEADER = "DPoP";
+    private static final Instant PROOF_ISSUED_AT = Instant.parse("2026-01-01T12:00:00Z");
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
@@ -281,7 +282,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                String jti) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .jwtID(jti)
-                .issueTime(Date.from(Instant.now()))
+                .issueTime(Date.from(PROOF_ISSUED_AT))
                 .claim("htm", method)
                 .claim("htu", uri)
                 .claim("ath", ath(accessToken))

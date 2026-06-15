@@ -19,7 +19,6 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -37,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
 
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-01-01T12:00:00Z");
     private final RequestService requestService;
     private final RequestRepository requestRepository;
     private final ClientRepository clientRepository;
@@ -152,7 +152,7 @@ class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
         UUID requestId = accepted.requestId();
 
         Request claimed = requestRepository
-                .claimPendingClientCreateBatch(1, OffsetDateTime.now(ZoneOffset.UTC))
+                .claimPendingClientCreateBatch(1, NOW)
                 .next()
                 .block();
 
@@ -160,7 +160,7 @@ class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
         assertThat(claimed.getId()).isEqualTo(requestId);
         assertThat(claimed.getStatus()).isEqualTo(RequestStatus.PROCESSING);
 
-        OffsetDateTime staleAt = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(10);
+        OffsetDateTime staleAt = NOW.minusMinutes(10);
         Long updated = databaseClient.sql("""
                         UPDATE request
                            SET status_changed_at = :staleAt

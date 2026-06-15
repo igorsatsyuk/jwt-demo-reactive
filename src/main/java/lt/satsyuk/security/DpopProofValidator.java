@@ -22,8 +22,8 @@ import org.springframework.util.StringUtils;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Instant;
-import java.util.Date;
 
 @Component
 public class DpopProofValidator {
@@ -38,9 +38,15 @@ public class DpopProofValidator {
 
     private final DpopProperties properties;
     private final Cache<String, Instant> usedProofIds;
+    private final Clock clock;
 
     public DpopProofValidator(DpopProperties properties) {
+        this(properties, Clock.systemUTC());
+    }
+
+    DpopProofValidator(DpopProperties properties, Clock clock) {
         this.properties = properties;
+        this.clock = clock;
         this.usedProofIds = Caffeine.newBuilder()
                 .maximumSize(properties.getReplayCacheSize())
                 .expireAfterWrite(properties.getMaxProofAge().plus(properties.getClockSkew()))
@@ -167,17 +173,16 @@ public class DpopProofValidator {
     }
 
     private void validateIssueTime(JWTClaimsSet claims) {
-        Date issueTime = claims.getIssueTime();
-        if (issueTime == null) {
+        Instant issuedAt = claims.getIssueTime() != null ? claims.getIssueTime().toInstant() : null;
+        if (issuedAt == null) {
             throw new DpopProofValidationException("DPoP proof issue time is missing");
         }
 
-        Instant now = Instant.now();
-        Instant iat = issueTime.toInstant();
+        Instant now = Instant.now(clock);
         Instant notBefore = now.minus(properties.getMaxProofAge()).minus(properties.getClockSkew());
         Instant notAfter = now.plus(properties.getClockSkew());
 
-        if (iat.isBefore(notBefore) || iat.isAfter(notAfter)) {
+        if (issuedAt.isBefore(notBefore) || issuedAt.isAfter(notAfter)) {
             throw new DpopProofValidationException("DPoP proof is expired or issued in the future");
         }
     }
@@ -191,7 +196,7 @@ public class DpopProofValidator {
         if (usedProofIds.getIfPresent(jti) != null) {
             throw new DpopProofValidationException("DPoP proof replay detected");
         }
-        usedProofIds.put(jti, Instant.now());
+        usedProofIds.put(jti, Instant.now(clock));
     }
 
     private void validateAccessTokenHash(JWTClaimsSet claims, String accessToken) {

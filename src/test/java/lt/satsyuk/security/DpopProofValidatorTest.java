@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.UUID;
 
@@ -28,12 +30,14 @@ class DpopProofValidatorTest {
     private static final String REQUEST_URI = "https://api.example.com/resource?x=1";
     private static final String ACCESS_TOKEN = "access-token-value";
     private static final RSAKey TEST_RSA_JWK = generateTestRsaJwk();
+    private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
+    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-    private final DpopProofValidator validator = new DpopProofValidator(defaultProperties());
+    private final DpopProofValidator validator = new DpopProofValidator(defaultProperties(), FIXED_CLOCK);
 
     @Test
     void validate_acceptsValidProof() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatCode(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null))
@@ -45,7 +49,7 @@ class DpopProofValidatorTest {
         String normalizedRequestUri = "https://api.example.com/resource";
         String proofUri = "https://API.EXAMPLE.COM:443/resource";
 
-        ProofData proofData = buildProof("get", proofUri, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof("get", proofUri, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatCode(() -> validator.validate("GET", normalizedRequestUri, ACCESS_TOKEN, proof, null))
@@ -54,7 +58,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsReplayUsingSameJti() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now(), "replay-id", "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, "replay-id", "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null);
@@ -66,7 +70,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsWrongProofType() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null))
@@ -76,7 +80,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsMethodMismatch() throws Exception {
-        ProofData proofData = buildProof("POST", REQUEST_URI, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof("POST", REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null))
@@ -86,7 +90,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsExpiredProof() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now().minus(Duration.ofMinutes(10)), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW.minus(Duration.ofMinutes(10)), UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null))
@@ -96,7 +100,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsAthMismatch() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, "other-token", Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, "other-token", NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, null))
@@ -106,7 +110,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsJktMismatch() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, REQUEST_URI, ACCESS_TOKEN, proof, "wrong-thumbprint"))
@@ -147,7 +151,7 @@ class DpopProofValidatorTest {
 
     @Test
     void validate_rejectsWhenRequestUriHasNoScheme() throws Exception {
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, Instant.now(), UUID.randomUUID().toString(), "dpop+jwt");
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
 
         assertThatThrownBy(() -> validator.validate(METHOD, "/relative", ACCESS_TOKEN, proof, null))
@@ -202,7 +206,7 @@ class DpopProofValidatorTest {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .claim("htm", METHOD)
                 .claim("ath", ath(ACCESS_TOKEN))
-                .issueTime(Date.from(Instant.now()))
+                .issueTime(Date.from(NOW))
                 .jwtID(UUID.randomUUID().toString())
                 .build();
 
