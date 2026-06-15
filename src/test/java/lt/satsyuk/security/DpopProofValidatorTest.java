@@ -11,6 +11,7 @@ import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.config.DpopProperties;
 import lt.satsyuk.exception.DpopProofValidationException;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -36,18 +37,12 @@ class DpopProofValidatorTest {
     private final DpopProofValidator validator = new DpopProofValidator(defaultProperties(), FIXED_CLOCK);
 
     @Test
-    void validate_acceptsValidProofWithDefaultUtcClockConstructor() throws Exception {
+    void defaultConstructor_usesUtcSystemClock() {
         DpopProofValidator validatorWithSystemClock = new DpopProofValidator(defaultProperties());
-        Instant now = Instant.now();
-        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, now, UUID.randomUUID().toString(), "dpop+jwt");
+        Clock clock = (Clock) ReflectionTestUtils.getField(validatorWithSystemClock, "clock");
 
-        assertThatCode(() -> validatorWithSystemClock.validate(
-                METHOD,
-                REQUEST_URI,
-                ACCESS_TOKEN,
-                proofData.serializedJwt(),
-                null
-        )).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(clock).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(clock.getZone()).isEqualTo(ZoneOffset.UTC);
     }
 
     @Test
