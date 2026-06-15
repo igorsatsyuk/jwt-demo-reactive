@@ -18,6 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SecurityServiceTest {
 
+    private static final Instant ISSUED_AT = Instant.parse("2026-01-01T12:00:00Z");
+    private static final Instant EXPIRES_AT = ISSUED_AT.plusSeconds(300);
+
     private final SecurityService securityService = new SecurityService();
 
     @Test
@@ -89,8 +92,8 @@ class SecurityServiceTest {
         var accessToken = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER,
                 "token-value",
-                Instant.now(),
-                Instant.now().plusSeconds(300)
+                ISSUED_AT,
+                EXPIRES_AT
         );
         return new BearerTokenAuthentication(principal, accessToken, AuthorityUtils.NO_AUTHORITIES);
     }

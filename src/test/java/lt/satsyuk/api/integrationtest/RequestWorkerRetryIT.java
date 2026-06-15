@@ -24,7 +24,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,6 +50,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
     protected static final String REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY = "Request worker transient DB error, retry ";
     protected static final String REQUEST_WORKER_ITERATION_FAILED = "Request worker iteration failed";
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-01-01T12:00:00Z");
     private final RequestService requestService;
     private final ObjectMapper objectMapper;
 
@@ -74,8 +74,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                 .id(requestId)
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PROCESSING)
-                .createdAt(OffsetDateTime.now(ZoneOffset.UTC))
-                .statusChangedAt(OffsetDateTime.now(ZoneOffset.UTC))
+                .createdAt(NOW)
+                .statusChangedAt(NOW)
                 .requestData(objectMapper.writeValueAsString(payload))
                 .build();
 

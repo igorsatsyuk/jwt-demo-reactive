@@ -16,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -30,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class RequestWorkerReclaimIT extends AbstractIntegrationTest {
 
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-01-01T12:00:00Z");
     private final RequestService requestService;
     private final RequestRepository requestRepository;
     private final ClientRepository clientRepository;
@@ -63,8 +63,8 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
     void worker_reclaims_stale_processing_request_and_completes_it() throws Exception {
         UUID requestId = UUID.randomUUID();
         CreateClientRequest payload = new CreateClientRequest("Stale", "Worker", "+37069995555");
-        OffsetDateTime createdAt = OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(20);
-        OffsetDateTime staleProcessingAt = OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(10);
+        OffsetDateTime createdAt = NOW.minusSeconds(20);
+        OffsetDateTime staleProcessingAt = NOW.minusSeconds(10);
 
         Request request = Request.builder()
                 .id(requestId)

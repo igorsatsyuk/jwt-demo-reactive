@@ -34,6 +34,9 @@ import static org.mockito.Mockito.when;
 
 class DpopAuthenticationWebFilterTest {
 
+    private static final Instant ISSUED_AT = Instant.parse("2026-01-01T12:00:00Z");
+    private static final Instant EXPIRES_AT = ISSUED_AT.plusSeconds(300);
+
     private final DpopProperties properties = new DpopProperties();
     private final DpopProofValidator validator = mock(DpopProofValidator.class);
     private final JsonAuthEntryPoint authEntryPoint = mock(JsonAuthEntryPoint.class);
@@ -259,8 +262,8 @@ class DpopAuthenticationWebFilterTest {
         Jwt jwt = Jwt.withTokenValue("jwt-token")
                 .header("alg", "none")
                 .claim("sub", "user")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300))
+                .issuedAt(ISSUED_AT)
+                .expiresAt(EXPIRES_AT)
                 .build();
         return new JwtAuthenticationToken(jwt, AuthorityUtils.NO_AUTHORITIES);
     }
@@ -270,8 +273,8 @@ class DpopAuthenticationWebFilterTest {
                 .header("alg", "none")
                 .claim("sub", "user")
                 .claim("cnf", Map.of("jkt", "thumbprint"))
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300))
+                .issuedAt(ISSUED_AT)
+                .expiresAt(EXPIRES_AT)
                 .build();
         return new JwtAuthenticationToken(jwt, AuthorityUtils.NO_AUTHORITIES);
     }

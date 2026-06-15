@@ -39,6 +39,7 @@ class RequestServiceTest {
 
     protected static final String JOHN = "John";
     protected static final String DOE = "Doe";
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-01-01T12:00:00Z");
     private final RequestRepository requestRepository = mock(RequestRepository.class);
     private final ClientService clientService = mock(ClientService.class);
     private final MessageService messageService = mock(MessageService.class);
@@ -80,7 +81,7 @@ class RequestServiceTest {
     @Test
     void getRequestStatus_returnsMappedResponse() {
         UUID id = UUID.randomUUID();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = NOW;
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)
@@ -115,7 +116,7 @@ class RequestServiceTest {
     @Test
     void getRequestStatus_returnsNullResponseOnInvalidJson() {
         UUID id = UUID.randomUUID();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = NOW;
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)
@@ -303,7 +304,7 @@ class RequestServiceTest {
     void reclaimStaleProcessingRequests_returnsEmptyWhenTimeoutIsZero() {
         ReflectionTestUtils.setField(requestService, "workerProcessingTimeout", Duration.ZERO);
 
-        Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", OffsetDateTime.now());
+        Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", NOW);
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository, never()).reclaimStaleClientCreateRequests(any(), any());
@@ -315,7 +316,7 @@ class RequestServiceTest {
         when(requestRepository.reclaimStaleClientCreateRequests(any(), any()))
                 .thenReturn(Mono.just(ReclaimStatsTestUtils.reclaimStats(2, 45)));
 
-        Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", OffsetDateTime.now());
+        Mono<Void> result = invokeMonoVoid(requestService, "reclaimStaleProcessingRequests", NOW);
 
         StepVerifier.create(result).verifyComplete();
         verify(requestRepository).reclaimStaleClientCreateRequests(any(), any());
@@ -415,7 +416,7 @@ class RequestServiceTest {
         ReflectionTestUtils.invokeMethod(
                 requestService,
                 "recordClaimLag",
-                OffsetDateTime.now(),
+                NOW,
                 request
         );
 

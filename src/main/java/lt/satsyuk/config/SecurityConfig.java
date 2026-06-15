@@ -15,6 +15,8 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.server.resource.introspection.ReactiveOpaqueTokenIntrospector;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
+import java.time.Clock;
+
 @Configuration
 @EnableReactiveMethodSecurity
 @EnableConfigurationProperties({RateLimitProperties.class, DpopProperties.class, OpaqueTokenCacheProperties.class})
@@ -75,5 +77,10 @@ public class SecurityConfig {
     @Bean
     public DpopAwareServerBearerTokenAuthenticationConverter dpopAwareServerBearerTokenAuthenticationConverter() {
         return new DpopAwareServerBearerTokenAuthenticationConverter();
+    }
+
+    @Bean
+    public Clock clock() {
+        return Clock.systemUTC();
     }
 }
