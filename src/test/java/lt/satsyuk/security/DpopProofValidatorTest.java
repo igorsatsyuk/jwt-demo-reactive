@@ -36,6 +36,21 @@ class DpopProofValidatorTest {
     private final DpopProofValidator validator = new DpopProofValidator(defaultProperties(), FIXED_CLOCK);
 
     @Test
+    void validate_acceptsValidProofWithDefaultUtcClockConstructor() throws Exception {
+        DpopProofValidator validatorWithSystemClock = new DpopProofValidator(defaultProperties());
+        Instant now = Instant.now();
+        ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, now, UUID.randomUUID().toString(), "dpop+jwt");
+
+        assertThatCode(() -> validatorWithSystemClock.validate(
+                METHOD,
+                REQUEST_URI,
+                ACCESS_TOKEN,
+                proofData.serializedJwt(),
+                null
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
     void validate_acceptsValidProof() throws Exception {
         ProofData proofData = buildProof(METHOD, REQUEST_URI, ACCESS_TOKEN, NOW, UUID.randomUUID().toString(), "dpop+jwt");
         String proof = proofData.serializedJwt();
