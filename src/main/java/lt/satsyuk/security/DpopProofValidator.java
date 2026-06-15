@@ -16,6 +16,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.config.DpopProperties;
 import lt.satsyuk.exception.DpopProofValidationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -40,11 +41,12 @@ public class DpopProofValidator {
     private final Cache<String, Instant> usedProofIds;
     private final Clock clock;
 
-    public DpopProofValidator(DpopProperties properties) {
+    DpopProofValidator(DpopProperties properties) {
         this(properties, Clock.systemUTC());
     }
 
-    DpopProofValidator(DpopProperties properties, Clock clock) {
+    @Autowired
+    public DpopProofValidator(DpopProperties properties, Clock clock) {
         this.properties = properties;
         this.clock = clock;
         this.usedProofIds = Caffeine.newBuilder()

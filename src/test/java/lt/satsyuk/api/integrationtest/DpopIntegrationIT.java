@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
@@ -48,15 +49,16 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private static final String DPOP_HEADER = "DPoP";
-    private static final Instant PROOF_ISSUED_AT = Instant.parse("2026-01-01T12:00:00Z");
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final Clock clock;
 
     @Autowired
-    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository) {
+    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository, Clock clock) {
         this.accountRepository = accountRepository;
         this.clientRepository = clientRepository;
+        this.clock = clock;
     }
 
     @BeforeEach
@@ -282,7 +284,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                String jti) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .jwtID(jti)
-                .issueTime(Date.from(PROOF_ISSUED_AT))
+                .issueTime(Date.from(clock.instant().minusSeconds(1)))
                 .claim("htm", method)
                 .claim("htu", uri)
                 .claim("ath", ath(accessToken))
