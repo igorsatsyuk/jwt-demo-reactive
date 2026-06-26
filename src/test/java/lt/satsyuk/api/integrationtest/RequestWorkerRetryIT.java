@@ -68,7 +68,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
 
     @Test
     void worker_retries_on_transient_db_error_and_eventually_completes() throws Exception {
-        CreateClientRequest payload = new CreateClientRequest("John", "Retry", "+37068880001");
+        CreateClientRequest payload = new CreateClientRequest("John", "Retry", "+37068880001", null);
         UUID requestId = UUID.randomUUID();
         Request pending = Request.builder()
                 .id(requestId)

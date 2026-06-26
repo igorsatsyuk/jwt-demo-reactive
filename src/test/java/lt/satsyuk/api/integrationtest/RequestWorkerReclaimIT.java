@@ -62,7 +62,7 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
     @Test
     void worker_reclaims_stale_processing_request_and_completes_it() throws Exception {
         UUID requestId = UUID.randomUUID();
-        CreateClientRequest payload = new CreateClientRequest("Stale", "Worker", "+37069995555");
+        CreateClientRequest payload = new CreateClientRequest("Stale", "Worker", "+37069995555", null);
         OffsetDateTime createdAt = NOW.minusSeconds(20);
         OffsetDateTime staleProcessingAt = NOW.minusSeconds(10);
 

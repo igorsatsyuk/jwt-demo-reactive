@@ -30,7 +30,7 @@ class ClientControllerTest {
 
     @Test
     void create_returnsAcceptedEnvelope() {
-        CreateClientRequest request = new CreateClientRequest("John", DOE, "+37060000000");
+        CreateClientRequest request = new CreateClientRequest("John", DOE, "+37060000000", null);
         RequestAcceptedResponse accepted = new RequestAcceptedResponse(UUID.randomUUID(), RequestStatus.PENDING);
         when(requestService.submitClientCreateRequest(request)).thenReturn(Mono.just(accepted));
 

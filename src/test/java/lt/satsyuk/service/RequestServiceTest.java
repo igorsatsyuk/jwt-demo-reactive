@@ -55,7 +55,7 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequest_failsWhenInsertDidNotPersistExactlyOneRow() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
 
         when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(0));
@@ -69,13 +69,101 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequest_returnsAcceptedWhenInsertPersistsOneRow() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002", null);
         when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
                 .assertNext(response -> assertThat(response.status()).isEqualTo(RequestStatus.PENDING))
                 .verifyComplete();
+    }
+
+    @Test
+    void submitClientCreateRequest_withIdempotencyKey_usesKeyAsRequestId() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000020", idempotencyKey);
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Mono.just(1));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .assertNext(response -> {
+                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void submitClientCreateRequest_withoutIdempotencyKey_generatesNewUuid() {
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000021", null);
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Mono.just(1));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .assertNext(response -> assertThat(response.requestId()).isNotNull())
+                .verifyComplete();
+    }
+
+    @Test
+    void submitClientCreateRequest_duplicateIdempotencyKey_returnsExistingRequest() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000022", idempotencyKey);
+        Request existingRequest = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.PENDING)
+                .createdAt(NOW)
+                .statusChangedAt(NOW)
+                .build();
+
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Mono.error(new RuntimeException("duplicate key value violates unique constraint \"request_pkey\"")));
+        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .assertNext(response -> {
+                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void submitClientCreateRequest_duplicateIdempotencyKey_returnsExistingRequestWhenCompleted() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000023", idempotencyKey);
+        Request existingRequest = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(NOW)
+                .statusChangedAt(NOW)
+                .build();
+
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Mono.error(new RuntimeException("duplicate key value violates unique constraint \"request_pkey\"")));
+        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .assertNext(response -> {
+                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.status()).isEqualTo(RequestStatus.COMPLETED);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void submitClientCreateRequest_nonIdempotencyDuplicateKeyError_propagatesOriginalError() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000024", idempotencyKey);
+
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Mono.error(new RuntimeException("some other DB error")));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .expectErrorSatisfies(error -> assertThat(error).isInstanceOf(RuntimeException.class)
+                        .hasMessage("some other DB error"))
+                .verify();
     }
 
     @Test
@@ -136,7 +224,7 @@ class RequestServiceTest {
     @Test
     void processClaimedRequest_marksCompletedOnSuccess() {
         UUID id = UUID.randomUUID();
-        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000003");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000003", null);
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)
@@ -159,7 +247,7 @@ class RequestServiceTest {
     @Test
     void processClaimedRequest_doesNotRecordCompletedMetricsWhenCompletionSkipped() {
         UUID id = UUID.randomUUID();
-        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000008");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37060000008", null);
         Request request = Request.builder()
                 .id(id)
                 .type(RequestType.CLIENT_CREATE)

@@ -107,9 +107,12 @@ public class RequestService {
     private Duration workerProcessingTimeout;
 
     public Mono<RequestAcceptedResponse> submitClientCreateRequest(CreateClientRequest createClientRequest) {
+        UUID requestId = createClientRequest.idempotencyKey() != null
+                ? createClientRequest.idempotencyKey()
+                : UUID.randomUUID();
         OffsetDateTime now = now();
         Request request = Request.builder()
-                .id(UUID.randomUUID())
+                .id(requestId)
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PENDING)
                 .createdAt(now)
@@ -131,7 +134,23 @@ public class RequestService {
                         return Mono.just(new RequestAcceptedResponse(request.getId(), request.getStatus()));
                     }
                     return Mono.error(new IllegalStateException("Failed to persist async request"));
-                });
+                })
+                .onErrorResume(ex -> isUniqueConstraintViolation(ex)
+                        ? requestRepository.findById(requestId)
+                                .map(existing -> new RequestAcceptedResponse(existing.getId(), existing.getStatus()))
+                        : Mono.error(ex));
+    }
+
+    private boolean isUniqueConstraintViolation(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains("duplicate key") && message.contains("request_pkey")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @Scheduled(

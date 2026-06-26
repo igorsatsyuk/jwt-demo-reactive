@@ -48,7 +48,7 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenPhoneAlreadyExistsWithoutPreCheck() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000000");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000000", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("uq_client_phone")));
@@ -67,7 +67,7 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenLegacyConstraintNameIsReported() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000009");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000009", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
@@ -84,7 +84,7 @@ class ClientServiceTest {
 
     @Test
     void create_usesFastPathWhenDuplicateKeyMessageAlreadyContainsPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000011");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000011", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         TrackingConstraintDuplicateKeyException duplicateKeyException =
                 new TrackingConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"");
@@ -105,7 +105,7 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000006");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000006", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         Throwable wrapped = new R2dbcDataIntegrityViolationException(
                 "duplicate",
@@ -127,7 +127,7 @@ class ClientServiceTest {
 
     @Test
     void create_returnsConflictWhenConstraintAppearsInSqlExceptionMessage() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000007");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000007", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         R2dbcDataIntegrityViolationException violation = new R2dbcDataIntegrityViolationException(
                 "duplicate key value violates unique constraint \"uq_client_phone\"",
@@ -148,7 +148,7 @@ class ClientServiceTest {
 
     @Test
     void create_propagatesUniqueViolationForNonPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000008");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000008", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         DuplicateKeyException error = new DuplicateKeyException("account_client_id_key");
 
@@ -167,7 +167,7 @@ class ClientServiceTest {
 
     @Test
     void create_emitsMapperFailureReactively() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000010");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000010", null);
         IllegalStateException mapperFailure = new IllegalStateException("mapper failed");
         when(clientMapper.toEntity(request)).thenThrow(mapperFailure);
 
@@ -183,7 +183,7 @@ class ClientServiceTest {
 
     @Test
     void create_persistsClientAndAccount_thenReturnsMappedResponse() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         Client savedClient = Client.builder().id(11L).firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         Account savedAccount = Account.builder().id(20L).clientId(11L).balance(BigDecimal.ZERO).build();
@@ -201,7 +201,7 @@ class ClientServiceTest {
 
     @Test
     void create_propagatesGenericDataIntegrityViolation() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002");
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002", null);
         Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
         DataIntegrityViolationException error = new DataIntegrityViolationException("not null");
 
