@@ -305,6 +305,35 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void create_client_request_duplicate_idempotencyKey_different_payload_returns_conflict() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest payload1 = new CreateClientRequest(JOHN, DOE, "+37069990010", idempotencyKey);
+        CreateClientRequest payload2 = new CreateClientRequest(JANE, "Roe", "+37069990011", idempotencyKey);
+
+        withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload1)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult();
+
+        AppResponse<Void> conflictResponse = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload2)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(conflictResponse).isNotNull();
+        assertThat(conflictResponse.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+    }
+
+    @Test
     void create_client_request_without_idempotencyKey_generates_new_id() {
         CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990007", null);
 

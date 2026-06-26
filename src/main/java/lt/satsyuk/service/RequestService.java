@@ -11,6 +11,7 @@ import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
+import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
@@ -136,10 +137,20 @@ public class RequestService {
                     }
                     return Mono.error(new IllegalStateException("Failed to persist async request"));
                 })
-                .onErrorResume(DuplicateKeyException.class,
-                        ex -> requestRepository.findById(requestId)
-                                .switchIfEmpty(Mono.error(ex))
-                                .map(existing -> new RequestAcceptedResponse(existing.getId(), existing.getStatus())));
+                .onErrorResume(DuplicateKeyException.class, ex -> {
+                    if (createClientRequest.idempotencyKey() == null) {
+                        return Mono.error(ex);
+                    }
+                    return requestRepository.findById(requestId)
+                            .switchIfEmpty(Mono.error(ex))
+                            .flatMap(existing -> {
+                                if (!request.getRequestData().equals(existing.getRequestData())) {
+                                    return Mono.error(new IdempotencyKeyConflictException(
+                                            "error.request.idempotencyKeyConflict"));
+                                }
+                                return Mono.just(new RequestAcceptedResponse(existing.getId(), existing.getStatus()));
+                            });
+                });
     }
 
     @Scheduled(
