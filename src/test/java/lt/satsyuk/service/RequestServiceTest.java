@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
+import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
@@ -57,7 +58,7 @@ class RequestServiceTest {
     void submitClientCreateRequest_failsWhenInsertDidNotPersistExactlyOneRow() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
 
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
                 .thenReturn(Mono.just(0));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
@@ -70,7 +71,7 @@ class RequestServiceTest {
     @Test
     void submitClientCreateRequest_returnsAcceptedWhenInsertPersistsOneRow() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002", null);
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
@@ -79,15 +80,16 @@ class RequestServiceTest {
     }
 
     @Test
-    void submitClientCreateRequest_withIdempotencyKey_usesKeyAsRequestId() {
+    void submitClientCreateRequest_withIdempotencyKey_generatesServerIdAndPersists() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000020", idempotencyKey);
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
+        when(requestRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Mono.empty());
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), eq(idempotencyKey)))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
                 .assertNext(response -> {
-                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.requestId()).isNotEqualTo(idempotencyKey);
                     assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
                 })
                 .verifyComplete();
@@ -96,7 +98,7 @@ class RequestServiceTest {
     @Test
     void submitClientCreateRequest_withoutIdempotencyKey_generatesNewUuid() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000021", null);
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
@@ -105,64 +107,84 @@ class RequestServiceTest {
     }
 
     @Test
-    void submitClientCreateRequest_duplicateIdempotencyKey_returnsExistingRequest() {
+    void submitClientCreateRequest_duplicateIdempotencyKey_samePayload_returnsExistingRequest() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000022", idempotencyKey);
+        String requestData = new ObjectMapper().valueToTree(request).toString();
         Request existingRequest = Request.builder()
-                .id(idempotencyKey)
+                .id(UUID.randomUUID())
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PENDING)
                 .createdAt(NOW)
                 .statusChangedAt(NOW)
+                .requestData(requestData)
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
-                .thenReturn(Mono.error(new RuntimeException("duplicate key value violates unique constraint \"request_pkey\"")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+        when(requestRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
                 .assertNext(response -> {
-                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.requestId()).isEqualTo(existingRequest.getId());
                     assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
                 })
                 .verifyComplete();
     }
 
     @Test
-    void submitClientCreateRequest_duplicateIdempotencyKey_returnsExistingRequestWhenCompleted() {
+    void submitClientCreateRequest_duplicateIdempotencyKey_samePayload_completedStatus() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000023", idempotencyKey);
+        String requestData = new ObjectMapper().valueToTree(request).toString();
         Request existingRequest = Request.builder()
-                .id(idempotencyKey)
+                .id(UUID.randomUUID())
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.COMPLETED)
                 .createdAt(NOW)
                 .statusChangedAt(NOW)
+                .requestData(requestData)
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
-                .thenReturn(Mono.error(new RuntimeException("duplicate key value violates unique constraint \"request_pkey\"")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+        when(requestRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
                 .assertNext(response -> {
-                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.requestId()).isEqualTo(existingRequest.getId());
                     assertThat(response.status()).isEqualTo(RequestStatus.COMPLETED);
                 })
                 .verifyComplete();
     }
 
     @Test
-    void submitClientCreateRequest_nonIdempotencyDuplicateKeyError_propagatesOriginalError() {
+    void submitClientCreateRequest_duplicateIdempotencyKey_differentPayload_throwsConflict() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000022", idempotencyKey);
+        Request existingRequest = Request.builder()
+                .id(UUID.randomUUID())
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.PENDING)
+                .createdAt(NOW)
+                .statusChangedAt(NOW)
+                .requestData("{\"firstName\":\"Other\",\"lastName\":\"Person\",\"phone\":\"+37060000099\",\"idempotencyKey\":\"" + idempotencyKey + "\"}")
+                .build();
+
+        when(requestRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+
+        StepVerifier.create(requestService.submitClientCreateRequest(request))
+                .expectError(IdempotencyKeyConflictException.class)
+                .verify();
+    }
+
+    @Test
+    void submitClientCreateRequest_idempotencyKey_lookupError_propagates() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000024", idempotencyKey);
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any()))
-                .thenReturn(Mono.error(new RuntimeException("some other DB error")));
+        when(requestRepository.findByIdempotencyKey(idempotencyKey))
+                .thenReturn(Mono.error(new RuntimeException("db connection lost")));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request))
                 .expectErrorSatisfies(error -> assertThat(error).isInstanceOf(RuntimeException.class)
-                        .hasMessage("some other DB error"))
+                        .hasMessage("db connection lost"))
                 .verify();
     }
 

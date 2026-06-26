@@ -1,6 +1,7 @@
 package lt.satsyuk.repository;
 
 import lt.satsyuk.model.Request;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
@@ -22,7 +23,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                 created_at,
                 status_changed_at,
                 request_data,
-                response_data
+                response_data,
+                idempotency_key
             ) VALUES (
                 :id,
                 :type,
@@ -30,7 +32,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                 :createdAt,
                 :statusChangedAt,
                 :requestData,
-                :responseData
+                :responseData,
+                :idempotencyKey
             )
             """)
     Mono<Integer> insertRequest(@Param("id") UUID id,
@@ -39,7 +42,10 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                 @Param("createdAt") OffsetDateTime createdAt,
                                 @Param("statusChangedAt") OffsetDateTime statusChangedAt,
                                 @Param("requestData") String requestData,
-                                @Param("responseData") String responseData);
+                                @Param("responseData") String responseData,
+                                @Param("idempotencyKey") UUID idempotencyKey);
+
+    Mono<Request> findByIdempotencyKey(UUID idempotencyKey);
 
     @Query("""
             WITH pending AS (

@@ -36,5 +36,8 @@ public class Request {
 
     @Column("response_data")
     private String responseData;
+
+    @Column("idempotency_key")
+    private UUID idempotencyKey;
 }
 

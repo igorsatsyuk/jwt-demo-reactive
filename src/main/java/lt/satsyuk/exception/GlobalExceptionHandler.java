@@ -230,6 +230,13 @@ public class GlobalExceptionHandler {
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
     }
 
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Mono<AppResponse<Void>> handleIdempotencyKeyConflict(IdempotencyKeyConflictException ex) {
+        String message = messageService.getMessage(ex.getMessageCode());
+        return Mono.just(AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
+    }
+
     @ExceptionHandler(KeycloakAuthException.class)
     public Mono<AppResponse<Void>> handleKeycloakAuthException(KeycloakAuthException ex, ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(ex.getStatus());
