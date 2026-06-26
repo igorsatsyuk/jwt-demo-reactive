@@ -244,7 +244,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void create_client_request_with_idempotencyKey_generates_server_id() {
+    void create_client_request_with_idempotencyKey_uses_key_as_request_id() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990005", idempotencyKey);
 
@@ -260,14 +260,16 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
                 .data();
 
         assertThat(accepted).isNotNull();
-        assertThat(accepted.requestId()).isNotEqualTo(idempotencyKey);
+        assertThat(accepted.requestId()).isEqualTo(idempotencyKey);
         assertThat(accepted.status()).isEqualTo(RequestStatus.PENDING);
+        assertThat(requestRepository.findById(idempotencyKey).blockOptional()).isPresent();
 
-        awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
+        RequestStatusResponse completed = awaitTerminalStatus(idempotencyKey, RequestStatus.COMPLETED);
+        assertThat(completed.response()).isInstanceOf(Map.class);
     }
 
     @Test
-    void create_client_request_duplicate_idempotencyKey_same_payload_returns_existing() {
+    void create_client_request_duplicate_idempotencyKey_returns_existing_request() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990006", idempotencyKey);
 
@@ -283,6 +285,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
                 .data();
 
         assertThat(firstAccepted).isNotNull();
+        assertThat(firstAccepted.requestId()).isEqualTo(idempotencyKey);
 
         RequestAcceptedResponse secondAccepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
@@ -298,36 +301,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(secondAccepted).isNotNull();
         assertThat(secondAccepted.requestId()).isEqualTo(firstAccepted.requestId());
 
-        awaitTerminalStatus(firstAccepted.requestId(), RequestStatus.COMPLETED);
-    }
-
-    @Test
-    void create_client_request_duplicate_idempotencyKey_different_payload_returns_conflict() {
-        UUID idempotencyKey = UUID.randomUUID();
-        CreateClientRequest payload1 = new CreateClientRequest(JOHN, DOE, "+37069990010", idempotencyKey);
-        CreateClientRequest payload2 = new CreateClientRequest(JANE, "Roe", "+37069990011", idempotencyKey);
-
-        withRole(CLIENT_CREATE_ROLE)
-                .post()
-                .uri(API_CLIENTS)
-                .bodyValue(payload1)
-                .exchange()
-                .expectStatus().isAccepted()
-                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
-                .returnResult();
-
-        AppResponse<Void> conflictResponse = withRole(CLIENT_CREATE_ROLE)
-                .post()
-                .uri(API_CLIENTS)
-                .bodyValue(payload2)
-                .exchange()
-                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
-                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
-                .returnResult()
-                .getResponseBody();
-
-        assertThat(conflictResponse).isNotNull();
-        assertThat(conflictResponse.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+        awaitTerminalStatus(idempotencyKey, RequestStatus.COMPLETED);
     }
 
     @Test
@@ -383,10 +357,12 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         assertThat(accepted1).isNotNull();
         assertThat(accepted2).isNotNull();
+        assertThat(accepted1.requestId()).isEqualTo(key1);
+        assertThat(accepted2.requestId()).isEqualTo(key2);
         assertThat(accepted1.requestId()).isNotEqualTo(accepted2.requestId());
 
-        awaitTerminalStatus(accepted1.requestId(), RequestStatus.COMPLETED);
-        awaitTerminalStatus(accepted2.requestId(), RequestStatus.COMPLETED);
+        awaitTerminalStatus(key1, RequestStatus.COMPLETED);
+        awaitTerminalStatus(key2, RequestStatus.COMPLETED);
     }
 
     private RequestStatusResponse awaitTerminalStatus(UUID requestId, RequestStatus expectedTerminalStatus) {

@@ -11,7 +11,6 @@ import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
-import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
@@ -20,7 +19,6 @@ import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -110,14 +108,9 @@ public class RequestService {
     private Duration workerProcessingTimeout;
 
     public Mono<RequestAcceptedResponse> submitClientCreateRequest(CreateClientRequest createClientRequest) {
-        UUID idempotencyKey = createClientRequest.idempotencyKey();
-        String requestData = writeJson(createClientRequest);
-
-        if (idempotencyKey != null) {
-            return handleWithIdempotencyKey(idempotencyKey, requestData, createClientRequest);
-        }
-
-        UUID requestId = UUID.randomUUID();
+        UUID requestId = createClientRequest.idempotencyKey() != null
+                ? createClientRequest.idempotencyKey()
+                : UUID.randomUUID();
         OffsetDateTime now = now();
         Request request = Request.builder()
                 .id(requestId)
@@ -125,41 +118,9 @@ public class RequestService {
                 .status(RequestStatus.PENDING)
                 .createdAt(now)
                 .statusChangedAt(now)
-                .requestData(requestData)
+                .requestData(writeJson(createClientRequest))
                 .build();
 
-        return insertRequest(request, null);
-    }
-
-    private Mono<RequestAcceptedResponse> handleWithIdempotencyKey(
-            UUID idempotencyKey, String requestData, CreateClientRequest createClientRequest) {
-
-        return requestRepository.findByIdempotencyKey(idempotencyKey)
-                .flatMap(existing -> {
-                    if (!requestData.equals(existing.getRequestData())) {
-                        return Mono.error(new IdempotencyKeyConflictException(
-                                "error.request.idempotencyKeyConflict"));
-                    }
-                    return Mono.just(new RequestAcceptedResponse(existing.getId(), existing.getStatus()));
-                })
-                .switchIfEmpty(Mono.defer(() -> {
-                    UUID requestId = UUID.randomUUID();
-                    OffsetDateTime now = now();
-                    Request request = Request.builder()
-                            .id(requestId)
-                            .type(RequestType.CLIENT_CREATE)
-                            .status(RequestStatus.PENDING)
-                            .createdAt(now)
-                            .statusChangedAt(now)
-                            .requestData(requestData)
-                            .idempotencyKey(idempotencyKey)
-                            .build();
-
-                    return insertRequest(request, idempotencyKey);
-                }));
-    }
-
-    private Mono<RequestAcceptedResponse> insertRequest(Request request, UUID idempotencyKey) {
         return requestRepository.insertRequest(
                         request.getId(),
                         request.getType().name(),
@@ -167,8 +128,7 @@ public class RequestService {
                         request.getCreatedAt(),
                         request.getStatusChangedAt(),
                         request.getRequestData(),
-                        null,
-                        idempotencyKey
+                        null
                 )
                 .flatMap(rows -> {
                     if (rows == 1) {
@@ -177,34 +137,9 @@ public class RequestService {
                     return Mono.error(new IllegalStateException("Failed to persist async request"));
                 })
                 .onErrorResume(DuplicateKeyException.class,
-                        ex -> resolveExistingByInsertIdempotencyKey(idempotencyKey, ex))
-                .onErrorResume(DataIntegrityViolationException.class,
-                        ex -> isIdempotencyKeyViolation(ex)
-                                ? resolveExistingByInsertIdempotencyKey(idempotencyKey, ex)
-                                : Mono.error(ex));
-    }
-
-    private Mono<RequestAcceptedResponse> resolveExistingByInsertIdempotencyKey(UUID idempotencyKey, Throwable original) {
-        if (idempotencyKey == null) {
-            return Mono.error(original);
-        }
-        return requestRepository.findByIdempotencyKey(idempotencyKey)
-                .switchIfEmpty(Mono.error(original))
-                .flatMap(existing -> Mono.just(
-                        new RequestAcceptedResponse(existing.getId(), existing.getStatus())));
-    }
-
-    private boolean isIdempotencyKeyViolation(DataIntegrityViolationException ex) {
-        Throwable current = ex;
-        while (current != null) {
-            if (current instanceof io.r2dbc.spi.R2dbcDataIntegrityViolationException r2dbc) {
-                return "23505".equals(r2dbc.getSqlState())
-                        && r2dbc.getMessage() != null
-                        && r2dbc.getMessage().contains("idx_request_idempotency_key");
-            }
-            current = current.getCause();
-        }
-        return false;
+                        ex -> requestRepository.findById(requestId)
+                                .switchIfEmpty(Mono.error(ex))
+                                .map(existing -> new RequestAcceptedResponse(existing.getId(), existing.getStatus())));
     }
 
     @Scheduled(
