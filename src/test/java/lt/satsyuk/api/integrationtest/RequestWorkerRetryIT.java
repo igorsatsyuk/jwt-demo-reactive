@@ -77,6 +77,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                 .createdAt(NOW)
                 .statusChangedAt(NOW)
                 .requestData(objectMapper.writeValueAsString(payload))
+                .authClientId("test-client")
                 .build();
 
         AtomicInteger subscribeAttempts = new AtomicInteger(0);
