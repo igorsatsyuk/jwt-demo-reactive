@@ -99,7 +99,7 @@ class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
     void two_instances_do_not_duplicate_single_request_processing() throws Exception {
         String phone = "+37069997777";
         RequestAcceptedResponse accepted = requestService
-                .submitClientCreateRequest(new lt.satsyuk.dto.CreateClientRequest("Multi", "Instance", phone))
+                .submitClientCreateRequest(new lt.satsyuk.dto.CreateClientRequest("Multi", "Instance", phone, null), "test-client")
                 .block();
 
         assertThat(accepted).isNotNull();
@@ -145,7 +145,7 @@ class RequestWorkerMultiInstanceIT extends AbstractIntegrationTest {
     void second_instance_reclaims_stale_processing_after_first_instance_crash_simulation() {
         String phone = "+37069998888";
         RequestAcceptedResponse accepted = requestService
-                .submitClientCreateRequest(new lt.satsyuk.dto.CreateClientRequest("Crash", "Reclaim", phone))
+                .submitClientCreateRequest(new lt.satsyuk.dto.CreateClientRequest("Crash", "Reclaim", phone, null), "test-client")
                 .block();
 
         assertThat(accepted).isNotNull();

@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Optional `idempotencyKey` (UUID) field in `POST /api/clients` for idempotent request deduplication per client. Same key + same payload returns existing request (202); different payload returns 409 Conflict.
+- `auth_client_id` column on `request` table tracks the owning client from the token. `GET /api/requests/{id}` verifies ownership; old rows with `auth_client_id='unknown'` remain readable during transition.
+- `HttpMessageNotReadableException` handler in `GlobalExceptionHandler` returns 400 with localized `error.request.invalidPayload` message.
+- New error messages: `error.request.idempotencyKeyConflict`, `error.request.invalidPayload` (en/ru).
 - Reactive project documentation set aligned with `jwt-demo` structure:
   - `API.md`
   - `SECURITY.md`

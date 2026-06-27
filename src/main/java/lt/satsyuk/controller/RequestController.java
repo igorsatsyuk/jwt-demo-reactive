@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.service.RequestService;
+import lt.satsyuk.service.SecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,7 @@ import java.util.UUID;
 public class RequestController {
 
     private final RequestService requestService;
+    private final SecurityService securityService;
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('CLIENT_CREATE')")
@@ -43,8 +45,9 @@ public class RequestController {
     @ApiResponse(responseCode = "404", description = "Request not found",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<RequestStatusResponse>> get(@PathVariable("id") UUID id) {
-        return requestService.getRequestStatus(id)
-                .map(AppResponse::ok);
+        return securityService.clientId()
+                .flatMap(clientId -> requestService.getRequestStatus(id, clientId)
+                        .map(AppResponse::ok));
     }
 }
 

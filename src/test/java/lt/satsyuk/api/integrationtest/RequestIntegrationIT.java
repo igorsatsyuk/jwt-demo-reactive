@@ -69,7 +69,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void create_client_request_is_processed_by_scheduler_and_completes() {
-        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990001");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990001", null);
 
         RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
@@ -118,7 +118,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
                 .blockOptional()
                 .orElseThrow();
 
-        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990002");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990002", null);
 
         RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
@@ -181,11 +181,47 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void get_request_status_truncated_uuid_returns_400() {
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
+                .get()
+                .uri(API_REQUESTS_ID, "550e8400-e29b-41d4-a716")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+    }
+
+    @Test
+    void create_client_request_invalid_idempotencyKey_returns_400() {
+        String invalidBody = "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37069990020\",\"idempotencyKey\":\"not-a-uuid\"}";
+
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(invalidBody)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+    }
+
+    @Test
     void get_request_status_without_required_role_returns_403() {
         RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
                 .uri(API_CLIENTS)
-                .bodyValue(new CreateClientRequest(JANE, DOE, "+37069990003"))
+                .bodyValue(new CreateClientRequest(JANE, DOE, "+37069990003", null))
                 .exchange()
                 .expectStatus().isAccepted()
                 .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {
@@ -215,7 +251,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void get_request_status_is_idempotent_after_terminal_state() {
-        CreateClientRequest payload = new CreateClientRequest(JOHN, "Idempotent", "+37069990004");
+        CreateClientRequest payload = new CreateClientRequest(JOHN, "Idempotent", "+37069990004", null);
         RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()
                 .uri(API_CLIENTS)
@@ -241,6 +277,157 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(first.status()).isEqualTo(terminal.status());
         assertThat(second.status()).isEqualTo(terminal.status());
         assertThat(first.response()).isEqualTo(second.response());
+    }
+
+    @Test
+    void create_client_request_with_idempotencyKey_uses_key_as_request_id() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990005", idempotencyKey);
+
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(accepted).isNotNull();
+        assertThat(accepted.requestId()).isEqualTo(idempotencyKey);
+        assertThat(accepted.status()).isEqualTo(RequestStatus.PENDING);
+        assertThat(requestRepository.findById(idempotencyKey).blockOptional()).isPresent();
+
+        RequestStatusResponse completed = awaitTerminalStatus(idempotencyKey, RequestStatus.COMPLETED);
+        assertThat(completed.response()).isInstanceOf(Map.class);
+    }
+
+    @Test
+    void create_client_request_duplicate_idempotencyKey_returns_existing_request() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990006", idempotencyKey);
+
+        RequestAcceptedResponse firstAccepted = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(firstAccepted).isNotNull();
+        assertThat(firstAccepted.requestId()).isEqualTo(idempotencyKey);
+
+        RequestAcceptedResponse secondAccepted = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(secondAccepted).isNotNull();
+        assertThat(secondAccepted.requestId()).isEqualTo(firstAccepted.requestId());
+
+        awaitTerminalStatus(idempotencyKey, RequestStatus.COMPLETED);
+    }
+
+    @Test
+    void create_client_request_duplicate_idempotencyKey_different_payload_returns_conflict() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest payload1 = new CreateClientRequest(JOHN, DOE, "+37069990010", idempotencyKey);
+        CreateClientRequest payload2 = new CreateClientRequest(JANE, "Roe", "+37069990011", idempotencyKey);
+
+        withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload1)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult();
+
+        AppResponse<Void> conflictResponse = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload2)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {})
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(conflictResponse).isNotNull();
+        assertThat(conflictResponse.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+    }
+
+    @Test
+    void create_client_request_without_idempotencyKey_generates_new_id() {
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990007", null);
+
+        RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(accepted).isNotNull();
+        assertThat(accepted.requestId()).isNotNull();
+        assertThat(accepted.status()).isEqualTo(RequestStatus.PENDING);
+
+        awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
+    }
+
+    @Test
+    void create_client_request_with_idempotencyKey_different_keys_create_separate_requests() {
+        UUID key1 = UUID.randomUUID();
+        UUID key2 = UUID.randomUUID();
+        CreateClientRequest payload1 = new CreateClientRequest(JOHN, DOE, "+37069990008", key1);
+        CreateClientRequest payload2 = new CreateClientRequest(JANE, "Roe", "+37069990009", key2);
+
+        RequestAcceptedResponse accepted1 = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload1)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        RequestAcceptedResponse accepted2 = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .bodyValue(payload2)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody(new ParameterizedTypeReference<AppResponse<RequestAcceptedResponse>>() {})
+                .returnResult()
+                .getResponseBody()
+                .data();
+
+        assertThat(accepted1).isNotNull();
+        assertThat(accepted2).isNotNull();
+        assertThat(accepted1.requestId()).isEqualTo(key1);
+        assertThat(accepted2.requestId()).isEqualTo(key2);
+        assertThat(accepted1.requestId()).isNotEqualTo(accepted2.requestId());
+
+        awaitTerminalStatus(key1, RequestStatus.COMPLETED);
+        awaitTerminalStatus(key2, RequestStatus.COMPLETED);
     }
 
     private RequestStatusResponse awaitTerminalStatus(UUID requestId, RequestStatus expectedTerminalStatus) {
