@@ -38,6 +38,6 @@ public class Request {
     private String responseData;
 
     @Column("auth_client_id")
-    private String authClientId;
+    private String authClientId = "unknown";
 }
 
