@@ -13,6 +13,9 @@ import java.util.UUID;
 
 public interface RequestRepository extends R2dbcRepository<Request, UUID> {
 
+    @Query("SELECT * FROM request WHERE id = :id AND auth_client_id = :authClientId")
+    Mono<Request> findByIdAndAuthClientId(@Param("id") UUID id, @Param("authClientId") String authClientId);
+
     @Modifying
     @Query("""
             INSERT INTO request (
@@ -89,14 +92,16 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                                          @Param("now") OffsetDateTime now);
 
     @Modifying
-    @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND status = 'PROCESSING'")
+    @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status = 'PROCESSING'")
     Mono<Integer> markCompleted(@Param("id") UUID id,
+                                @Param("authClientId") String authClientId,
                                 @Param("responseData") String responseData,
                                 @Param("now") OffsetDateTime now);
 
     @Modifying
-    @Query("UPDATE request SET status = 'FAILED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND status = 'PROCESSING'")
+    @Query("UPDATE request SET status = 'FAILED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status = 'PROCESSING'")
     Mono<Integer> markFailed(@Param("id") UUID id,
+                             @Param("authClientId") String authClientId,
                              @Param("responseData") String responseData,
                              @Param("now") OffsetDateTime now);
 

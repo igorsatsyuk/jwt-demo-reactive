@@ -142,11 +142,10 @@ public class RequestService {
                     if (createClientRequest.idempotencyKey() == null) {
                         return Mono.error(ex);
                     }
-                    return requestRepository.findById(requestId)
+                    return requestRepository.findByIdAndAuthClientId(requestId, authClientId)
                             .switchIfEmpty(Mono.error(ex))
                             .flatMap(existing -> {
-                                if (!request.getRequestData().equals(existing.getRequestData())
-                                        || !authClientId.equals(existing.getAuthClientId())) {
+                                if (!request.getRequestData().equals(existing.getRequestData())) {
                                     return Mono.error(new IdempotencyKeyConflictException(
                                             "error.request.idempotencyKeyConflict"));
                                 }
@@ -182,21 +181,27 @@ public class RequestService {
     }
 
     public Mono<RequestStatusResponse> getRequestStatus(UUID requestId, String authClientId) {
-        return requestRepository.findById(requestId)
-                .switchIfEmpty(Mono.error(new RequestNotFoundException(requestId)))
-                .flatMap(request -> {
-                    if (!authClientId.equals(request.getAuthClientId())) {
-                        return Mono.error(new RequestNotFoundException(requestId));
-                    }
-                    return Mono.just(new RequestStatusResponse(
-                            request.getId(),
-                            request.getType(),
-                            request.getStatus(),
-                            request.getCreatedAt(),
-                            request.getStatusChangedAt(),
-                            readJson(request.getResponseData())
-                    ));
-                });
+        return requestRepository.findByIdAndAuthClientId(requestId, authClientId)
+                .map(request -> toStatusResponse(request))
+                .switchIfEmpty(Mono.defer(() -> requestRepository.findById(requestId)
+                        .flatMap(request -> {
+                            if ("unknown".equals(request.getAuthClientId())) {
+                                return Mono.just(toStatusResponse(request));
+                            }
+                            return Mono.error(new RequestNotFoundException(requestId));
+                        })
+                        .switchIfEmpty(Mono.error(new RequestNotFoundException(requestId)))));
+    }
+
+    private RequestStatusResponse toStatusResponse(Request request) {
+        return new RequestStatusResponse(
+                request.getId(),
+                request.getType(),
+                request.getStatus(),
+                request.getCreatedAt(),
+                request.getStatusChangedAt(),
+                readJson(request.getResponseData())
+        );
     }
 
     private Mono<Void> claimAndProcessBatch() {
@@ -274,6 +279,7 @@ public class RequestService {
 
     private Mono<Void> processClaimedRequest(Request request) {
         UUID requestId = request.getId();
+        String authClientId = request.getAuthClientId();
         long startedNanos = System.nanoTime();
         return Mono.defer(() -> {
                     if (request.getType() != RequestType.CLIENT_CREATE) {
@@ -282,14 +288,14 @@ public class RequestService {
 
                     CreateClientRequest payload = readJson(request.getRequestData(), CreateClientRequest.class);
                     return clientService.create(payload)
-                            .flatMap(clientResponse -> markCompleted(requestId, clientResponse, startedNanos));
+                            .flatMap(clientResponse -> markCompleted(requestId, authClientId, clientResponse, startedNanos));
                 })
-                .onErrorResume(ex -> markFailed(requestId, ex, startedNanos));
+                .onErrorResume(ex -> markFailed(requestId, authClientId, ex, startedNanos));
     }
 
-    private Mono<Void> markCompleted(UUID requestId, ClientResponse clientResponse, long startedNanos) {
+    private Mono<Void> markCompleted(UUID requestId, String authClientId, ClientResponse clientResponse, long startedNanos) {
         String responseJson = writeJson(AppResponse.ok(clientResponse));
-        return requestRepository.markCompleted(requestId, responseJson, now())
+        return requestRepository.markCompleted(requestId, authClientId, responseJson, now())
                 .doOnNext(updated -> {
                     if (updated == 1) {
                         completedTerminalStatusCount.increment();
@@ -305,10 +311,10 @@ public class RequestService {
     }
 
 
-    private Mono<Void> markFailed(UUID requestId, Throwable ex, long startedNanos) {
+    private Mono<Void> markFailed(UUID requestId, String authClientId, Throwable ex, long startedNanos) {
         AppResponse<Void> errorPayload = toWorkerError(ex);
         String errorJson = writeJson(errorPayload);
-        return requestRepository.markFailed(requestId, errorJson, now())
+        return requestRepository.markFailed(requestId, authClientId, errorJson, now())
                 .doOnNext(updated -> {
                     if (updated == 1) {
                         if (startedNanos > 0L) {

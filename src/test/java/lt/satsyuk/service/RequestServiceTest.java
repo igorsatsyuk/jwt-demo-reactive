@@ -123,7 +123,7 @@ class RequestServiceTest {
 
         when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client")).thenReturn(Mono.just(existingRequest));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
                 .assertNext(response -> {
@@ -150,7 +150,7 @@ class RequestServiceTest {
 
         when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client")).thenReturn(Mono.just(existingRequest));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
                 .assertNext(response -> {
@@ -176,7 +176,7 @@ class RequestServiceTest {
 
         when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client")).thenReturn(Mono.just(existingRequest));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
                 .expectError(IdempotencyKeyConflictException.class)
@@ -184,27 +184,19 @@ class RequestServiceTest {
     }
 
     @Test
-    void submitClientCreateRequest_duplicateIdempotencyKey_differentClientId_throwsConflict() throws JsonProcessingException {
+    void submitClientCreateRequest_duplicateIdempotencyKey_differentClientId_createsSeparateRequest() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000027", idempotencyKey);
-        String requestData = new ObjectMapper().writeValueAsString(request);
-        Request existingRequest = Request.builder()
-                .id(idempotencyKey)
-                .type(RequestType.CLIENT_CREATE)
-                .status(RequestStatus.PENDING)
-                .createdAt(NOW)
-                .statusChangedAt(NOW)
-                .requestData(requestData)
-                .authClientId("other-client")
-                .build();
 
         when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
-                .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
+                .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
-                .expectError(IdempotencyKeyConflictException.class)
-                .verify();
+                .assertNext(response -> {
+                    assertThat(response.requestId()).isEqualTo(idempotencyKey);
+                    assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -214,7 +206,7 @@ class RequestServiceTest {
 
         when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.empty());
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client")).thenReturn(Mono.empty());
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
                 .expectError(DuplicateKeyException.class)
@@ -249,7 +241,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(requestRepository.findById(id)).thenReturn(Mono.just(request));
+        when(requestRepository.findByIdAndAuthClientId(id, "test-client")).thenReturn(Mono.just(request));
 
         StepVerifier.create(requestService.getRequestStatus(id, "test-client"))
                 .assertNext(response -> {
@@ -264,6 +256,7 @@ class RequestServiceTest {
     @Test
     void getRequestStatus_returnsNotFoundWhenMissing() {
         UUID id = UUID.randomUUID();
+        when(requestRepository.findByIdAndAuthClientId(id, "test-client")).thenReturn(Mono.empty());
         when(requestRepository.findById(id)).thenReturn(Mono.empty());
 
         StepVerifier.create(requestService.getRequestStatus(id, "test-client"))
@@ -285,6 +278,7 @@ class RequestServiceTest {
                 .authClientId("other-client")
                 .build();
 
+        when(requestRepository.findByIdAndAuthClientId(id, "test-client")).thenReturn(Mono.empty());
         when(requestRepository.findById(id)).thenReturn(Mono.just(request));
 
         StepVerifier.create(requestService.getRequestStatus(id, "test-client"))
@@ -306,7 +300,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(requestRepository.findById(id)).thenReturn(Mono.just(request));
+        when(requestRepository.findByIdAndAuthClientId(id, "test-client")).thenReturn(Mono.just(request));
 
         StepVerifier.create(requestService.getRequestStatus(id, "test-client"))
                 .assertNext(response -> assertThat(response.response()).isNull())
@@ -322,16 +316,17 @@ class RequestServiceTest {
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PROCESSING)
                 .requestData("{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37060000003\"}")
+                .authClientId("test-client")
                 .build();
 
         when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
-        when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(1));
+        when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(1));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
         StepVerifier.create(result).verifyComplete();
-        verify(requestRepository).markCompleted(any(), anyString(), any());
-        verify(requestRepository, never()).markFailed(any(), anyString(), any());
+        verify(requestRepository).markCompleted(any(), anyString(), anyString(), any());
+        verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
         assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "COMPLETED").count()).isEqualTo(1.0d);
         assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "COMPLETED").count()).isEqualTo(1L);
     }
@@ -345,10 +340,11 @@ class RequestServiceTest {
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PROCESSING)
                 .requestData("{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37060000008\"}")
+                .authClientId("test-client")
                 .build();
 
         when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
-        when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(0));
+        when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
@@ -365,15 +361,16 @@ class RequestServiceTest {
                 .type(RequestType.OTHER)
                 .status(RequestStatus.PROCESSING)
                 .requestData("{}")
+                .authClientId("test-client")
                 .build();
 
         when(messageService.getMessage("api.error.internalServerError")).thenReturn("Internal server error");
-        when(requestRepository.markFailed(any(), anyString(), any())).thenReturn(Mono.just(1));
+        when(requestRepository.markFailed(any(), anyString(), anyString(), any())).thenReturn(Mono.just(1));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
         StepVerifier.create(result).verifyComplete();
-        verify(requestRepository).markFailed(any(), anyString(), any());
+        verify(requestRepository).markFailed(any(), anyString(), anyString(), any());
         assertThat(meterRegistry.counter("request.worker.terminal_status", "status", "FAILED").count()).isEqualTo(1.0d);
         assertThat(meterRegistry.timer("request.worker.processing_duration", "terminal_status", "FAILED").count()).isEqualTo(1L);
     }
@@ -386,10 +383,11 @@ class RequestServiceTest {
                 .type(RequestType.OTHER)
                 .status(RequestStatus.PROCESSING)
                 .requestData("{}")
+                .authClientId("test-client")
                 .build();
 
         when(messageService.getMessage("api.error.internalServerError")).thenReturn("Internal server error");
-        when(requestRepository.markFailed(any(), anyString(), any())).thenReturn(Mono.just(0));
+        when(requestRepository.markFailed(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
 
@@ -506,12 +504,13 @@ class RequestServiceTest {
 
     @Test
     void markCompleted_completesWhenRowWasNotUpdated() {
-        when(requestRepository.markCompleted(any(), anyString(), any())).thenReturn(Mono.just(0));
+        when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(
                 requestService,
                 "markCompleted",
                 UUID.randomUUID(),
+                "test-client",
                 new ClientResponse(1L, JOHN, DOE, "+37060000007"),
                 -1L
         );
@@ -522,12 +521,13 @@ class RequestServiceTest {
     @Test
     void markFailed_completesWhenRowWasNotUpdated() {
         when(messageService.getMessage("api.error.internalServerError")).thenReturn("Internal server error");
-        when(requestRepository.markFailed(any(), anyString(), any())).thenReturn(Mono.just(0));
+        when(requestRepository.markFailed(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(
                 requestService,
                 "markFailed",
                 UUID.randomUUID(),
+                "test-client",
                 new IllegalStateException("boom"),
                 -1L
         );

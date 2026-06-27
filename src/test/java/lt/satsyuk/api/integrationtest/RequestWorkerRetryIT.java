@@ -95,7 +95,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
         when(clientService.create(any(CreateClientRequest.class)))
                 .thenReturn(Mono.just(new ClientResponse(101L, payload.firstName(), payload.lastName(), payload.phone())));
 
-        when(requestRepository.markCompleted(eq(requestId), anyString(), any()))
+        when(requestRepository.markCompleted(eq(requestId), anyString(), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
         requestService.processPendingRequests();
@@ -105,8 +105,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                 .untilAsserted(() -> {
                     assertThat(subscribeAttempts.get()).isGreaterThanOrEqualTo(2);
                     verify(requestRepository, times(1)).claimPendingClientCreateBatch(anyInt(), any());
-                    verify(requestRepository, times(1)).markCompleted(eq(requestId), anyString(), any());
-                    verify(requestRepository, never()).markFailed(any(), anyString(), any());
+                    verify(requestRepository, times(1)).markCompleted(eq(requestId), anyString(), anyString(), any());
+                    verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
                 });
     }
 
@@ -131,8 +131,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     assertThat(subscribeAttempts.get()).isGreaterThanOrEqualTo(3);
                     verify(requestRepository, times(1)).claimPendingClientCreateBatch(anyInt(), any());
                     verify(clientService, never()).create(any(CreateClientRequest.class));
-                    verify(requestRepository, never()).markCompleted(any(), anyString(), any());
-                    verify(requestRepository, never()).markFailed(any(), anyString(), any());
+                    verify(requestRepository, never()).markCompleted(any(), anyString(), anyString(), any());
+                    verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
                     assertThat(output.getOut()).contains(REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY + "1/2");
                     assertThat(output.getOut()).contains(REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY + "2/2");
                     assertThat(TestTextUtils.countOccurrences(output.getOut(), REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY)).isEqualTo(2);
@@ -161,8 +161,8 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     assertThat(subscribeAttempts.get()).isEqualTo(1);
                     verify(requestRepository, times(1)).claimPendingClientCreateBatch(anyInt(), any());
                     verify(clientService, never()).create(any(CreateClientRequest.class));
-                    verify(requestRepository, never()).markCompleted(any(), anyString(), any());
-                    verify(requestRepository, never()).markFailed(any(), anyString(), any());
+                    verify(requestRepository, never()).markCompleted(any(), anyString(), anyString(), any());
+                    verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
                     assertThat(output.getOut()).contains(REQUEST_WORKER_ITERATION_FAILED);
                 });
     }
