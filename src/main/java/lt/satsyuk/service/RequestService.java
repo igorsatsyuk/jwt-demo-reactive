@@ -130,7 +130,6 @@ public class RequestService {
                         request.getCreatedAt(),
                         request.getStatusChangedAt(),
                         request.getRequestData(),
-                        null,
                         authClientId
                 )
                 .flatMap(rows -> {

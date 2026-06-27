@@ -31,7 +31,7 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                 :createdAt,
                 :statusChangedAt,
                 :requestData,
-                :responseData,
+                NULL,
                 :authClientId
             )
             """)
@@ -41,7 +41,6 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                 @Param("createdAt") OffsetDateTime createdAt,
                                 @Param("statusChangedAt") OffsetDateTime statusChangedAt,
                                 @Param("requestData") String requestData,
-                                @Param("responseData") String responseData,
                                 @Param("authClientId") String authClientId);
 
     @Query("""

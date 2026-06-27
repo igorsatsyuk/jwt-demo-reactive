@@ -59,7 +59,7 @@ class RequestServiceTest {
     void submitClientCreateRequest_failsWhenInsertDidNotPersistExactlyOneRow() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
 
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(0));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
@@ -72,7 +72,7 @@ class RequestServiceTest {
     @Test
     void submitClientCreateRequest_returnsAcceptedWhenInsertPersistsOneRow() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002", null);
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
@@ -84,7 +84,7 @@ class RequestServiceTest {
     void submitClientCreateRequest_withIdempotencyKey_usesKeyAsRequestId() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000020", idempotencyKey);
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
@@ -98,7 +98,7 @@ class RequestServiceTest {
     @Test
     void submitClientCreateRequest_withoutIdempotencyKey_generatesNewUuid() {
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000021", null);
-        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any(), any()))
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))
@@ -121,7 +121,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
         when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
@@ -148,7 +148,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
         when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
@@ -174,7 +174,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
         when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
@@ -198,7 +198,7 @@ class RequestServiceTest {
                 .authClientId("other-client")
                 .build();
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
         when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.just(existingRequest));
 
@@ -212,7 +212,7 @@ class RequestServiceTest {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000024", idempotencyKey);
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new DuplicateKeyException("duplicate key")));
         when(requestRepository.findById(idempotencyKey)).thenReturn(Mono.empty());
 
@@ -226,7 +226,7 @@ class RequestServiceTest {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000025", idempotencyKey);
 
-        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), any(), anyString()))
+        when(requestRepository.insertRequest(eq(idempotencyKey), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(Mono.error(new RuntimeException("some other DB error")));
 
         StepVerifier.create(requestService.submitClientCreateRequest(request, "test-client"))

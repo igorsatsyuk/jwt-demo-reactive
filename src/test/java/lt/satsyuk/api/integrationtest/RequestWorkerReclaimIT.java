@@ -82,7 +82,6 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
                         request.getCreatedAt(),
                         request.getStatusChangedAt(),
                         request.getRequestData(),
-                        null,
                         null
                 )
                 .block();
