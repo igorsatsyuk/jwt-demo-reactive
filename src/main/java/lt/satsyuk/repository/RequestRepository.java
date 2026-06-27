@@ -22,7 +22,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                 created_at,
                 status_changed_at,
                 request_data,
-                response_data
+                response_data,
+                auth_client_id
             ) VALUES (
                 :id,
                 :type,
@@ -30,7 +31,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                 :createdAt,
                 :statusChangedAt,
                 :requestData,
-                :responseData
+                :responseData,
+                :authClientId
             )
             """)
     Mono<Integer> insertRequest(@Param("id") UUID id,
@@ -39,7 +41,8 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                 @Param("createdAt") OffsetDateTime createdAt,
                                 @Param("statusChangedAt") OffsetDateTime statusChangedAt,
                                 @Param("requestData") String requestData,
-                                @Param("responseData") String responseData);
+                                @Param("responseData") String responseData,
+                                @Param("authClientId") String authClientId);
 
     @Query("""
             WITH pending AS (

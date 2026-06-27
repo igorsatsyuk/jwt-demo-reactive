@@ -36,5 +36,8 @@ public class Request {
 
     @Column("response_data")
     private String responseData;
+
+    @Column("auth_client_id")
+    private String authClientId;
 }
 

@@ -13,6 +13,7 @@ import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.service.ClientService;
 import lt.satsyuk.service.RequestService;
+import lt.satsyuk.service.SecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,7 @@ public class ClientController {
 
     private final ClientService clientService;
     private final RequestService requestService;
+    private final SecurityService securityService;
 
     @PostMapping
     @PreAuthorize("hasRole('CLIENT_CREATE')")
@@ -46,8 +48,9 @@ public class ClientController {
             content = @Content(mediaType = "application/json"))
     public Mono<ResponseEntity<AppResponse<RequestAcceptedResponse>>> create(
             @Valid @RequestBody CreateClientRequest req) {
-        return requestService.submitClientCreateRequest(req)
-                .map(response -> ResponseEntity.status(HttpStatus.ACCEPTED).body(AppResponse.ok(response)));
+        return securityService.clientId()
+                .flatMap(clientId -> requestService.submitClientCreateRequest(req, clientId)
+                        .map(response -> ResponseEntity.status(HttpStatus.ACCEPTED).body(AppResponse.ok(response))));
     }
 
     @GetMapping("/{id}")

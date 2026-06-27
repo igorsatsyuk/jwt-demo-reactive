@@ -108,7 +108,7 @@ public class RequestService {
     @Value("${app.request.worker.processing-timeout:2m}")
     private Duration workerProcessingTimeout;
 
-    public Mono<RequestAcceptedResponse> submitClientCreateRequest(CreateClientRequest createClientRequest) {
+    public Mono<RequestAcceptedResponse> submitClientCreateRequest(CreateClientRequest createClientRequest, String authClientId) {
         UUID requestId = createClientRequest.idempotencyKey() != null
                 ? createClientRequest.idempotencyKey()
                 : UUID.randomUUID();
@@ -120,6 +120,7 @@ public class RequestService {
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(writeJson(createClientRequest))
+                .authClientId(authClientId)
                 .build();
 
         return requestRepository.insertRequest(
@@ -129,7 +130,8 @@ public class RequestService {
                         request.getCreatedAt(),
                         request.getStatusChangedAt(),
                         request.getRequestData(),
-                        null
+                        null,
+                        authClientId
                 )
                 .flatMap(rows -> {
                     if (rows == 1) {
@@ -144,7 +146,8 @@ public class RequestService {
                     return requestRepository.findById(requestId)
                             .switchIfEmpty(Mono.error(ex))
                             .flatMap(existing -> {
-                                if (!request.getRequestData().equals(existing.getRequestData())) {
+                                if (!request.getRequestData().equals(existing.getRequestData())
+                                        || !authClientId.equals(existing.getAuthClientId())) {
                                     return Mono.error(new IdempotencyKeyConflictException(
                                             "error.request.idempotencyKeyConflict"));
                                 }
@@ -179,17 +182,22 @@ public class RequestService {
                 );
     }
 
-    public Mono<RequestStatusResponse> getRequestStatus(UUID requestId) {
+    public Mono<RequestStatusResponse> getRequestStatus(UUID requestId, String authClientId) {
         return requestRepository.findById(requestId)
                 .switchIfEmpty(Mono.error(new RequestNotFoundException(requestId)))
-                .map(request -> new RequestStatusResponse(
-                        request.getId(),
-                        request.getType(),
-                        request.getStatus(),
-                        request.getCreatedAt(),
-                        request.getStatusChangedAt(),
-                        readJson(request.getResponseData())
-                ));
+                .flatMap(request -> {
+                    if (!authClientId.equals(request.getAuthClientId())) {
+                        return Mono.error(new RequestNotFoundException(requestId));
+                    }
+                    return Mono.just(new RequestStatusResponse(
+                            request.getId(),
+                            request.getType(),
+                            request.getStatus(),
+                            request.getCreatedAt(),
+                            request.getStatusChangedAt(),
+                            readJson(request.getResponseData())
+                    ));
+                });
     }
 
     private Mono<Void> claimAndProcessBatch() {

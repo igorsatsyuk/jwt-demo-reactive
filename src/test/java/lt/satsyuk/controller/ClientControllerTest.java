@@ -7,6 +7,7 @@ import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.service.ClientService;
 import lt.satsyuk.service.RequestService;
+import lt.satsyuk.service.SecurityService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import reactor.core.publisher.Mono;
@@ -16,6 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -25,14 +28,16 @@ class ClientControllerTest {
     protected static final String DOE = "Doe";
     private final ClientService clientService = mock(ClientService.class);
     private final RequestService requestService = mock(RequestService.class);
+    private final SecurityService securityService = mock(SecurityService.class);
 
-    private final ClientController controller = new ClientController(clientService, requestService);
+    private final ClientController controller = new ClientController(clientService, requestService, securityService);
 
     @Test
     void create_returnsAcceptedEnvelope() {
         CreateClientRequest request = new CreateClientRequest("John", DOE, "+37060000000", null);
         RequestAcceptedResponse accepted = new RequestAcceptedResponse(UUID.randomUUID(), RequestStatus.PENDING);
-        when(requestService.submitClientCreateRequest(request)).thenReturn(Mono.just(accepted));
+        when(securityService.clientId()).thenReturn(Mono.just("test-client"));
+        when(requestService.submitClientCreateRequest(any(), anyString())).thenReturn(Mono.just(accepted));
 
         StepVerifier.create(controller.create(request))
                 .assertNext(response -> {
