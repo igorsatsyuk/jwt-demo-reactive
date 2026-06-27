@@ -181,6 +181,43 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void get_request_status_truncated_uuid_returns_400() {
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
+                .get()
+                .uri(API_REQUESTS_ID, "550e8400-e29b-41d4-a716")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+    }
+
+    @Test
+    void create_client_request_invalid_idempotencyKey_returns_400() {
+        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990020", null);
+        String invalidBody = "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37069990020\",\"idempotencyKey\":\"not-a-uuid\"}";
+
+        AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
+                .post()
+                .uri(API_CLIENTS)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(invalidBody)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(new ParameterizedTypeReference<AppResponse<Void>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+    }
+
+    @Test
     void get_request_status_without_required_role_returns_403() {
         RequestAcceptedResponse accepted = withRole(CLIENT_CREATE_ROLE)
                 .post()

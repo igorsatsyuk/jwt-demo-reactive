@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -241,6 +242,13 @@ public class GlobalExceptionHandler {
     public Mono<AppResponse<Void>> handleKeycloakAuthException(KeycloakAuthException ex, ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(ex.getStatus());
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.UNAUTHORIZED.getCode(), ex.getKeycloakMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Mono<AppResponse<Void>> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        return Mono.just(AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(),
+                messageService.getMessage("error.request.invalidPayload")));
     }
 
     @ExceptionHandler(Exception.class)

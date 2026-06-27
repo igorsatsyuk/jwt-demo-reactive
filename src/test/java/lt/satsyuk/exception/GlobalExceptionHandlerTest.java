@@ -8,6 +8,7 @@ import org.springframework.context.MessageSourceResolvable;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.access.AccessDeniedException;
@@ -435,6 +436,20 @@ class GlobalExceptionHandlerTest {
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
         assertThat(response.message()).isEqualTo("secondary: ClientId must be greater than 0");
+    }
+
+    @Test
+    void handleHttpMessageNotReadable_returnsBadRequestWithInvalidPayloadMessage() {
+        when(messageService.getMessage("error.request.invalidPayload")).thenReturn("Invalid request payload");
+
+        HttpMessageNotReadableException ex = new HttpMessageNotReadableException(
+                "JSON parse error", null, null);
+
+        AppResponse<Void> response = handler.handleHttpMessageNotReadable(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
+        assertThat(response.message()).isEqualTo("Invalid request payload");
     }
 
     static class ValidationDummy {
