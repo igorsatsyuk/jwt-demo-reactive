@@ -184,7 +184,8 @@ Request body:
 {
   "firstName": "John",
   "lastName": "Doe",
-  "phone": "+37061234567"
+  "phone": "+37061234567",
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -192,6 +193,9 @@ Validation:
 - `firstName`: required, 1..50
 - `lastName`: required, 1..50
 - `phone`: required, `+[0-9]{7,15}`
+- `idempotencyKey`: optional UUID
+
+**Idempotency**: if `idempotencyKey` is provided, the server uses it for idempotent deduplication per client. Repeating the same key with the same payload returns the existing request (202). Repeating with a different payload returns 409 Conflict.
 
 Success response (`202`):
 

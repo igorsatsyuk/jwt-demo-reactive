@@ -36,7 +36,7 @@ public class ClientController {
 
     @PostMapping
     @PreAuthorize("hasRole('CLIENT_CREATE')")
-    @Operation(summary = "Create client", description = "Creates an asynchronous client creation request.")
+    @Operation(summary = "Create client", description = "Creates an asynchronous client creation request. Optional idempotencyKey (UUID) enables idempotent deduplication per client.")
     @ApiResponse(responseCode = "202", description = "Client creation request accepted",
             content = @Content(mediaType = "application/json",
                     schema = @Schema(implementation = AppResponse.class)))
