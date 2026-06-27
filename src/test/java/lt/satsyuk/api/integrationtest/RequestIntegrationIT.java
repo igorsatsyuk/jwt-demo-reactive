@@ -198,7 +198,6 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void create_client_request_invalid_idempotencyKey_returns_400() {
-        CreateClientRequest payload = new CreateClientRequest(JOHN, DOE, "+37069990020", null);
         String invalidBody = "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"phone\":\"+37069990020\",\"idempotencyKey\":\"not-a-uuid\"}";
 
         AppResponse<Void> response = withRole(CLIENT_CREATE_ROLE)
