@@ -115,8 +115,8 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void create_client_request_duplicate_phone_becomes_failed_with_conflict_payload() {
-        clientRepository.save(Client.builder()
+    void create_client_request_duplicate_phone_returns_existing_client_and_adds_access() {
+        Client existing = clientRepository.save(Client.builder()
                         .firstName(JANE)
                         .lastName("Roe")
                         .phone("+37069990002")
@@ -140,14 +140,14 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(accepted).isNotNull();
         assertThat(requestRepository.findById(accepted.requestId()).blockOptional()).isPresent();
 
-        RequestStatusResponse failed = awaitTerminalStatus(accepted.requestId(), RequestStatus.FAILED);
-        assertThat(failed.response()).isInstanceOf(Map.class);
+        RequestStatusResponse completed = awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
+        assertThat(completed.response()).isInstanceOf(Map.class);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> nested = (Map<String, Object>) failed.response();
+        Map<String, Object> nested = (Map<String, Object>) completed.response();
         assertThat(nested)
-                .containsEntry("code", AppResponse.ErrorCode.CONFLICT.getCode())
-                .containsEntry("message", "Client with phone=+37069990002 already exists");
+                .containsEntry("code", 0)
+                .containsEntry("id", existing.getId().intValue());
     }
 
     @Test

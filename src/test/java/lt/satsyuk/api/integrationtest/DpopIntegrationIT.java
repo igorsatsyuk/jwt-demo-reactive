@@ -16,6 +16,7 @@ import lt.satsyuk.dto.LogoutRequest;
 import lt.satsyuk.dto.RefreshRequest;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
 import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
@@ -49,6 +50,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private static final String DPOP_HEADER = "DPoP";
+    private static final String AUTH_CLIENT_ID = "spring-app";
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
@@ -264,6 +266,12 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                         .build())
                 .blockOptional()
                 .orElseThrow();
+
+        clientAccessRepository.save(ClientAccess.builder()
+                        .clientId(client.getId())
+                        .authClientId(AUTH_CLIENT_ID)
+                        .build())
+                .blockOptional();
 
         return accountRepository.save(Account.builder()
                         .balance(new BigDecimal(balance))
