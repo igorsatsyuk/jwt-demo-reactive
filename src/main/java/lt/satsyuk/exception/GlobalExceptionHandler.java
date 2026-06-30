@@ -65,6 +65,13 @@ public class GlobalExceptionHandler {
                 messageService.getMessage("api.error.forbidden")));
     }
 
+    @ExceptionHandler(ResourceAccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Mono<AppResponse<Void>> handleResourceAccessDenied(ResourceAccessDeniedException ex) {
+        return Mono.just(AppResponse.error(AppResponse.ErrorCode.FORBIDDEN.getCode(),
+                messageService.getMessage(ex.getMessageCode())));
+    }
+
     @ExceptionHandler(AccountNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Mono<AppResponse<Void>> handleAccountNotFound(AccountNotFoundException ex) {
@@ -76,6 +83,13 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public Mono<AppResponse<Void>> handleAccountOptimisticLock(AccountOptimisticLockException ex) {
         String message = messageService.getMessage(ex.getMessageCode(), new Object[]{String.valueOf(ex.getClientId())});
+        return Mono.just(AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
+    }
+
+    @ExceptionHandler(AccountUpdateInProgressException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Mono<AppResponse<Void>> handleAccountUpdateInProgress(AccountUpdateInProgressException ex) {
+        String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getRequestId().toString()});
         return Mono.just(AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
     }
 

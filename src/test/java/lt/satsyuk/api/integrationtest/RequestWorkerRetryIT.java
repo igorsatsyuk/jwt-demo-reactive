@@ -93,7 +93,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                     return Flux.just(pending);
                 }));
 
-        when(clientService.create(any(CreateClientRequest.class)))
+        when(clientService.create(any(CreateClientRequest.class), anyString()))
                 .thenReturn(Mono.just(new ClientResponse(101L, payload.firstName(), payload.lastName(), payload.phone())));
 
         when(requestRepository.markCompleted(eq(requestId), anyString(), anyString(), any()))
@@ -131,7 +131,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                 .untilAsserted(() -> {
                     assertThat(subscribeAttempts.get()).isGreaterThanOrEqualTo(3);
                     verify(requestRepository, times(1)).claimPendingClientCreateBatch(anyInt(), any());
-                    verify(clientService, never()).create(any(CreateClientRequest.class));
+                    verify(clientService, never()).create(any(CreateClientRequest.class), anyString());
                     verify(requestRepository, never()).markCompleted(any(), anyString(), anyString(), any());
                     verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
                     assertThat(output.getOut()).contains(REQUEST_WORKER_TRANSIENT_DB_ERROR_RETRY + "1/2");
@@ -161,7 +161,7 @@ class RequestWorkerRetryIT extends AbstractIntegrationTest {
                 .untilAsserted(() -> {
                     assertThat(subscribeAttempts.get()).isEqualTo(1);
                     verify(requestRepository, times(1)).claimPendingClientCreateBatch(anyInt(), any());
-                    verify(clientService, never()).create(any(CreateClientRequest.class));
+                    verify(clientService, never()).create(any(CreateClientRequest.class), anyString());
                     verify(requestRepository, never()).markCompleted(any(), anyString(), anyString(), any());
                     verify(requestRepository, never()).markFailed(any(), anyString(), anyString(), any());
                     assertThat(output.getOut()).contains(REQUEST_WORKER_ITERATION_FAILED);

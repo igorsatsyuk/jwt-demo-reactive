@@ -319,7 +319,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
+        when(clientService.create(payload, "test-client")).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
         when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(1));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
@@ -343,7 +343,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
+        when(clientService.create(payload, "test-client")).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
         when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);

@@ -4,15 +4,14 @@ import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.exception.ClientNotFoundException;
 import lt.satsyuk.exception.ClientSearchQueryTooShortException;
-import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.mapper.ClientMapper;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
-import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
@@ -21,11 +20,11 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,145 +39,49 @@ class ClientServiceTest {
     protected static final String SMITH = "Smith";
     protected static final String ANNA = "Anna";
     protected static final String BOB = "Bob";
+    private static final String AUTH_CLIENT_ID = "spring-app";
+
     private final ClientRepository clientRepository = mock(ClientRepository.class);
     private final AccountRepository accountRepository = mock(AccountRepository.class);
+    private final ClientAccessRepository clientAccessRepository = mock(ClientAccessRepository.class);
     private final ClientMapper clientMapper = mock(ClientMapper.class);
 
-    private final ClientService clientService = new ClientService(clientRepository, accountRepository, clientMapper);
+    private final ClientService clientService = new ClientService(clientRepository, accountRepository, clientAccessRepository, clientMapper);
 
     @Test
-    void create_returnsConflictWhenPhoneAlreadyExistsWithoutPreCheck() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000000", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("uq_client_phone")));
+    void create_returnsExistingClientAndAddsAccessWhenPhoneExists() {
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
+        Client existing = Client.builder().id(7L).firstName(JOHN).lastName(DOE).phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, JOHN, DOE, "+37060000001");
 
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    PhoneAlreadyExistsException ex = (PhoneAlreadyExistsException) error;
-                    assertThat(ex.getPhone()).isEqualTo(request.phone());
-                })
-                .verify();
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Mono.just(existing));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(Mono.just(false));
+        when(clientAccessRepository.save(any(ClientAccess.class))).thenReturn(Mono.just(new ClientAccess()));
+        when(clientMapper.toResponse(existing)).thenReturn(response);
 
-        verify(clientRepository, never()).existsByPhone(anyString());
-        verifyNoInteractions(accountRepository);
+        StepVerifier.create(clientService.create(request, AUTH_CLIENT_ID))
+                .expectNext(response)
+                .verifyComplete();
+
+        verify(clientAccessRepository).save(any(ClientAccess.class));
+        verify(accountRepository, never()).save(any(Account.class));
     }
 
     @Test
-    void create_returnsConflictWhenLegacyConstraintNameIsReported() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000009", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("client_phone_key")));
+    void create_doesNotDuplicateAccessWhenPhoneExistsAndAccessAlreadyPresent() {
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
+        Client existing = Client.builder().id(7L).firstName(JOHN).lastName(DOE).phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, JOHN, DOE, "+37060000001");
 
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
-                })
-                .verify();
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Mono.just(existing));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(Mono.just(true));
+        when(clientMapper.toResponse(existing)).thenReturn(response);
 
-        verifyNoInteractions(accountRepository);
-    }
+        StepVerifier.create(clientService.create(request, AUTH_CLIENT_ID))
+                .expectNext(response)
+                .verifyComplete();
 
-    @Test
-    void create_usesFastPathWhenDuplicateKeyMessageAlreadyContainsPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000011", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        TrackingConstraintDuplicateKeyException duplicateKeyException =
-                new TrackingConstraintDuplicateKeyException("duplicate key value violates unique constraint \"uq_client_phone\"");
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(duplicateKeyException));
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
-                })
-                .verify();
-
-        assertThat(duplicateKeyException.wasConstraintLookupCalled()).isFalse();
-
-        verifyNoInteractions(accountRepository);
-    }
-
-    @Test
-    void create_returnsConflictWhenSqlStateAndConstraintIndicatePhoneUniqueViolation() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000006", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        Throwable wrapped = new R2dbcDataIntegrityViolationException(
-                "duplicate",
-                "23505",
-                new ConstraintCarrierException("uq_client_phone")
-        );
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(wrapped));
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
-                })
-                .verify();
-
-        verifyNoInteractions(accountRepository);
-    }
-
-    @Test
-    void create_returnsConflictWhenConstraintAppearsInSqlExceptionMessage() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000007", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        R2dbcDataIntegrityViolationException violation = new R2dbcDataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"uq_client_phone\"",
-                "23505"
-        );
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(violation));
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(PhoneAlreadyExistsException.class);
-                    assertThat(((PhoneAlreadyExistsException) error).getPhone()).isEqualTo(request.phone());
-                })
-                .verify();
-
-        verifyNoInteractions(accountRepository);
-    }
-
-    @Test
-    void create_propagatesUniqueViolationForNonPhoneConstraint() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000008", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        DuplicateKeyException error = new DuplicateKeyException("account_client_id_key");
-
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(error));
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(actual -> {
-                    assertThat(actual).isInstanceOf(DuplicateKeyException.class);
-                    assertThat(actual).isSameAs(error);
-                })
-                .verify();
-
-        verifyNoInteractions(accountRepository);
-    }
-
-    @Test
-    void create_emitsMapperFailureReactively() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000010", null);
-        IllegalStateException mapperFailure = new IllegalStateException("mapper failed");
-        when(clientMapper.toEntity(request)).thenThrow(mapperFailure);
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(IllegalStateException.class);
-                    assertThat(error).isSameAs(mapperFailure);
-                })
-                .verify();
-
-        verifyNoInteractions(clientRepository, accountRepository);
+        verify(clientAccessRepository, never()).save(any(ClientAccess.class));
     }
 
     @Test
@@ -189,32 +92,56 @@ class ClientServiceTest {
         Account savedAccount = Account.builder().id(20L).clientId(11L).balance(BigDecimal.ZERO).build();
         ClientResponse response = new ClientResponse(11L, JOHN, DOE, request.phone());
 
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Mono.empty());
         when(clientMapper.toEntity(request)).thenReturn(mappedClient);
         when(clientRepository.save(mappedClient)).thenReturn(Mono.just(savedClient));
+        when(clientAccessRepository.save(any(ClientAccess.class))).thenReturn(Mono.just(new ClientAccess()));
         when(accountRepository.save(any(Account.class))).thenReturn(Mono.just(savedAccount));
         when(clientMapper.toResponse(savedClient)).thenReturn(response);
 
-        StepVerifier.create(clientService.create(request))
+        StepVerifier.create(clientService.create(request, AUTH_CLIENT_ID))
+                .expectNext(response)
+                .verifyComplete();
+
+        verify(clientAccessRepository).save(any(ClientAccess.class));
+    }
+
+    @Test
+    void create_handlesDuplicateKeyByLookingUpExistingClient() {
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000001", null);
+        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
+        Client existing = Client.builder().id(7L).firstName(JOHN).lastName(DOE).phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, JOHN, DOE, "+37060000001");
+
+        when(clientRepository.findByPhone(request.phone()))
+                .thenReturn(Mono.empty())
+                .thenReturn(Mono.just(existing));
+        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
+        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(new DuplicateKeyException("uq_client_phone")));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(Mono.just(false));
+        when(clientAccessRepository.save(any(ClientAccess.class))).thenReturn(Mono.just(new ClientAccess()));
+        when(clientMapper.toResponse(existing)).thenReturn(response);
+
+        StepVerifier.create(clientService.create(request, AUTH_CLIENT_ID))
                 .expectNext(response)
                 .verifyComplete();
     }
 
     @Test
-    void create_propagatesGenericDataIntegrityViolation() {
-        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000002", null);
-        Client mappedClient = Client.builder().firstName(JOHN).lastName(DOE).phone(request.phone()).build();
-        DataIntegrityViolationException error = new DataIntegrityViolationException("not null");
+    void create_emitsMapperFailureReactively() {
+        CreateClientRequest request = new CreateClientRequest(JOHN, DOE, "+37060000010", null);
+        IllegalStateException mapperFailure = new IllegalStateException("mapper failed");
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Mono.empty());
+        when(clientMapper.toEntity(request)).thenThrow(mapperFailure);
 
-        when(clientMapper.toEntity(request)).thenReturn(mappedClient);
-        when(clientRepository.save(mappedClient)).thenReturn(Mono.error(error));
-
-        StepVerifier.create(clientService.create(request))
-                .expectErrorSatisfies(actual -> {
-                    assertThat(actual).isInstanceOf(DataIntegrityViolationException.class);
-                    assertThat(actual).isSameAs(error);
+        StepVerifier.create(clientService.create(request, AUTH_CLIENT_ID))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(IllegalStateException.class);
+                    assertThat(error).isSameAs(mapperFailure);
                 })
                 .verify();
 
+        verify(clientRepository, never()).save(any());
         verifyNoInteractions(accountRepository);
     }
 
@@ -223,26 +150,26 @@ class ClientServiceTest {
         Client client = Client.builder().id(7L).firstName(JANE).lastName(DOE).phone("+37060000003").build();
         ClientResponse response = new ClientResponse(7L, JANE, DOE, "+37060000003");
 
-        when(clientRepository.findById(7L)).thenReturn(Mono.just(client));
+        when(clientRepository.findByIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(Mono.just(client));
         when(clientMapper.toResponse(client)).thenReturn(response);
 
-        StepVerifier.create(clientService.get(7L))
+        StepVerifier.create(clientService.get(7L, AUTH_CLIENT_ID))
                 .expectNext(response)
                 .verifyComplete();
     }
 
     @Test
     void get_returnsNotFoundWhenMissing() {
-        when(clientRepository.findById(100L)).thenReturn(Mono.empty());
+        when(clientRepository.findByIdAndAuthClientId(100L, AUTH_CLIENT_ID)).thenReturn(Mono.empty());
 
-        StepVerifier.create(clientService.get(100L))
+        StepVerifier.create(clientService.get(100L, AUTH_CLIENT_ID))
                 .expectError(ClientNotFoundException.class)
                 .verify();
     }
 
     @Test
     void search_rejectsTooShortQueryAfterTrim() {
-        StepVerifier.create(clientService.searchByNameOrSurname("  ab  "))
+        StepVerifier.create(clientService.searchByNameOrSurname("  ab  ", AUTH_CLIENT_ID))
                 .expectError(ClientSearchQueryTooShortException.class)
                 .verify();
     }
@@ -257,42 +184,12 @@ class ClientServiceTest {
         ClientResponse r1 = new ClientResponse(1L, ANNA, SMITH, "+37060000004");
         ClientResponse r2 = new ClientResponse(2L, BOB, SMITH, "+37060000005");
 
-        when(clientRepository.searchByNameOrSurname(SMITH, 2)).thenReturn(Flux.just(c1, c2));
+        when(clientRepository.searchByNameOrSurnameAndAuthClientId(SMITH, AUTH_CLIENT_ID, 2)).thenReturn(Flux.just(c1, c2));
         when(clientMapper.toResponse(c1)).thenReturn(r1);
         when(clientMapper.toResponse(c2)).thenReturn(r2);
 
-        StepVerifier.create(clientService.searchByNameOrSurname("  Smith  "))
+        StepVerifier.create(clientService.searchByNameOrSurname("  Smith  ", AUTH_CLIENT_ID))
                 .assertNext(result -> assertThat(result).isEqualTo(List.of(r1, r2)))
                 .verifyComplete();
-    }
-
-    private static final class ConstraintCarrierException extends RuntimeException {
-        private final String constraintName;
-
-        private ConstraintCarrierException(String constraintName) {
-            this.constraintName = constraintName;
-        }
-
-        public String getConstraintName() {
-            return constraintName;
-        }
-    }
-
-    private static final class TrackingConstraintDuplicateKeyException extends DuplicateKeyException {
-        private final AtomicBoolean constraintLookupCalled = new AtomicBoolean(false);
-
-        private TrackingConstraintDuplicateKeyException(String msg) {
-            super(msg);
-        }
-
-        @SuppressWarnings("unused")
-        public String getConstraintName() {
-            constraintLookupCalled.set(true);
-            return "uq_client_phone";
-        }
-
-        private boolean wasConstraintLookupCalled() {
-            return constraintLookupCalled.get();
-        }
     }
 }
