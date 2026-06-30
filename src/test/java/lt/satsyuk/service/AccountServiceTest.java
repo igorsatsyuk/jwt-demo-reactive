@@ -206,7 +206,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimistic_successCreatesRequestAndCompletesIt() throws JsonProcessingException {
+    void updateBalancePessimistic_successCreatesRequestAndCompletesIt() {
         UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
         UUID requestId = UUID.randomUUID();
         lt.satsyuk.model.Account account = lt.satsyuk.model.Account.builder()

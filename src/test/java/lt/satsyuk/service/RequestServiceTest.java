@@ -754,13 +754,6 @@ class RequestServiceTest {
     @Test
     void completeRequest_updatesRequestToCompleted() {
         UUID requestId = UUID.randomUUID();
-        Request request = Request.builder()
-                .id(requestId)
-                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
-                .status(RequestStatus.PROCESSING)
-                .createdAt(NOW)
-                .statusChangedAt(NOW)
-                .build();
         when(requestRepository.markCompleted(eq(requestId), eq("test-client"), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
@@ -773,13 +766,6 @@ class RequestServiceTest {
     @Test
     void failRequest_updatesRequestToFailed() {
         UUID requestId = UUID.randomUUID();
-        Request request = Request.builder()
-                .id(requestId)
-                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
-                .status(RequestStatus.PROCESSING)
-                .createdAt(NOW)
-                .statusChangedAt(NOW)
-                .build();
         when(requestRepository.markFailed(eq(requestId), eq("test-client"), anyString(), any()))
                 .thenReturn(Mono.just(1));
 
