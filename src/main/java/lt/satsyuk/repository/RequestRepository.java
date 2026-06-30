@@ -92,14 +92,14 @@ public interface RequestRepository extends R2dbcRepository<Request, UUID> {
                                                          @Param("now") OffsetDateTime now);
 
     @Modifying
-    @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status = 'PROCESSING'")
+    @Query("UPDATE request SET status = 'COMPLETED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status IN ('PENDING', 'PROCESSING')")
     Mono<Integer> markCompleted(@Param("id") UUID id,
                                 @Param("authClientId") String authClientId,
                                 @Param("responseData") String responseData,
                                 @Param("now") OffsetDateTime now);
 
     @Modifying
-    @Query("UPDATE request SET status = 'FAILED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status = 'PROCESSING'")
+    @Query("UPDATE request SET status = 'FAILED', response_data = :responseData, status_changed_at = :now WHERE id = :id AND auth_client_id = :authClientId AND status IN ('PENDING', 'PROCESSING')")
     Mono<Integer> markFailed(@Param("id") UUID id,
                              @Param("authClientId") String authClientId,
                              @Param("responseData") String responseData,
