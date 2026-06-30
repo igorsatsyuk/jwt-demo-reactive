@@ -67,7 +67,7 @@ public class ClientService {
     private Mono<Void> addAccessIfAbsent(Client client, String authClientId) {
         return clientAccessRepository.existsByClientIdAndAuthClientId(client.getId(), authClientId)
                 .flatMap(exists -> {
-                    if (exists) {
+                    if (Boolean.TRUE.equals(exists)) {
                         return Mono.empty();
                     }
                     return clientAccessRepository.save(ClientAccess.builder()

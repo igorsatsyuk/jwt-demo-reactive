@@ -7,7 +7,6 @@ import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
 import lt.satsyuk.model.RequestStatus;
-import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
 import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
@@ -149,8 +148,8 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) outer.get("data");
-        assertThat(data).isNotNull();
-        assertThat(data).containsEntry("id", existing.getId().intValue());
+        assertThat(data).isNotNull()
+                .containsEntry("id", existing.getId().intValue());
     }
 
     @Test
