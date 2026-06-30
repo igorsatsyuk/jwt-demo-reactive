@@ -66,7 +66,8 @@ public class ClientController {
     @ApiResponse(responseCode = "404", description = "Not found",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<ClientResponse>> get(@PathVariable("id") Long id) {
-        return clientService.get(id)
+        return securityService.clientId()
+                .flatMap(authClientId -> clientService.get(id, authClientId))
                 .map(AppResponse::ok);
     }
 
@@ -83,7 +84,8 @@ public class ClientController {
     @ApiResponse(responseCode = "403", description = "Forbidden",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<List<ClientResponse>>> search(@RequestParam("q") String query) {
-        return clientService.searchByNameOrSurname(query)
+        return securityService.clientId()
+                .flatMap(authClientId -> clientService.searchByNameOrSurname(query, authClientId))
                 .map(AppResponse::ok);
     }
 }

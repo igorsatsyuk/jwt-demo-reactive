@@ -8,6 +8,7 @@ import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import lt.satsyuk.repository.RequestRepository;
 import org.awaitility.Awaitility;
@@ -44,16 +45,19 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     private final ClientRepository clientRepository;
     private final AccountRepository accountRepository;
     private final RequestRepository requestRepository;
+    private final ClientAccessRepository clientAccessRepository;
 
     @Autowired
     RequestIntegrationIT(
             ClientRepository clientRepository,
             AccountRepository accountRepository,
-            RequestRepository requestRepository
+            RequestRepository requestRepository,
+            ClientAccessRepository clientAccessRepository
     ) {
         this.clientRepository = clientRepository;
         this.accountRepository = accountRepository;
         this.requestRepository = requestRepository;
+        this.clientAccessRepository = clientAccessRepository;
     }
 
     @MockitoBean
@@ -63,6 +67,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     void setUp() {
         requestRepository.deleteAll()
                 .then(accountRepository.deleteAll())
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block();
     }
@@ -109,8 +114,8 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void create_client_request_duplicate_phone_becomes_failed_with_conflict_payload() {
-        clientRepository.save(Client.builder()
+    void create_client_request_duplicate_phone_returns_existing_client_and_adds_access() {
+        Client existing = clientRepository.save(Client.builder()
                         .firstName(JANE)
                         .lastName("Roe")
                         .phone("+37069990002")
@@ -134,14 +139,17 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(accepted).isNotNull();
         assertThat(requestRepository.findById(accepted.requestId()).blockOptional()).isPresent();
 
-        RequestStatusResponse failed = awaitTerminalStatus(accepted.requestId(), RequestStatus.FAILED);
-        assertThat(failed.response()).isInstanceOf(Map.class);
+        RequestStatusResponse completed = awaitTerminalStatus(accepted.requestId(), RequestStatus.COMPLETED);
+        assertThat(completed.response()).isInstanceOf(Map.class);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> nested = (Map<String, Object>) failed.response();
-        assertThat(nested)
-                .containsEntry("code", AppResponse.ErrorCode.CONFLICT.getCode())
-                .containsEntry("message", "Client with phone=+37069990002 already exists");
+        Map<String, Object> outer = (Map<String, Object>) completed.response();
+        assertThat(outer).containsEntry("code", 0);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) outer.get("data");
+        assertThat(data).isNotNull()
+                .containsEntry("id", existing.getId().intValue());
     }
 
     @Test

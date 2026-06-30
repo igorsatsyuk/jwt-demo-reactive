@@ -319,7 +319,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
+        when(clientService.create(payload, "test-client")).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000003")));
         when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(1));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
@@ -343,7 +343,7 @@ class RequestServiceTest {
                 .authClientId("test-client")
                 .build();
 
-        when(clientService.create(payload)).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
+        when(clientService.create(payload, "test-client")).thenReturn(Mono.just(new ClientResponse(1L, JOHN, DOE, "+37060000008")));
         when(requestRepository.markCompleted(any(), anyString(), anyString(), any())).thenReturn(Mono.just(0));
 
         Mono<Void> result = invokeMonoVoid(requestService, "processClaimedRequest", request);
@@ -663,4 +663,115 @@ class RequestServiceTest {
         return result;
     }
 
+    // --- createPendingRequestIfAbsent tests ---
+
+    @Test
+    void createPendingRequestIfAbsent_createsNewRequestWithoutIdempotencyKey() {
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(null, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.insertRequest(any(), anyString(), anyString(), any(), any(), anyString(), anyString()))
+                .thenReturn(Mono.just(1));
+
+        StepVerifier.create(requestService.createPendingRequestIfAbsent(
+                        null, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, "test-client"))
+                .assertNext(result -> {
+                    assertThat(result.alreadyExisted()).isFalse();
+                    assertThat(result.requestId()).isNotNull();
+                    assertThat(result.savedResponseData()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void createPendingRequestIfAbsent_returnsExistingForSamePayload() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existing = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData("{\"idempotencyKey\":\"" + idempotencyKey + "\",\"clientId\":1,\"amount\":50.00}")
+                .responseData("{\"code\":0,\"data\":{\"accountId\":1,\"clientId\":1,\"balance\":\"60.00\"}}")
+                .build();
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client"))
+                .thenReturn(Mono.just(existing));
+
+        StepVerifier.create(requestService.createPendingRequestIfAbsent(
+                        idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, "test-client"))
+                .assertNext(result -> {
+                    assertThat(result.alreadyExisted()).isTrue();
+                    assertThat(result.status()).isEqualTo(RequestStatus.COMPLETED);
+                    assertThat(result.savedResponseData()).contains("\"code\":0");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void createPendingRequestIfAbsent_throwsConflictForSameKeyDifferentPayload() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest incoming = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existing = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData("{\"idempotencyKey\":\"" + idempotencyKey + "\",\"clientId\":1,\"amount\":99.00}")
+                .build();
+        when(requestRepository.findByIdAndAuthClientId(idempotencyKey, "test-client"))
+                .thenReturn(Mono.just(existing));
+
+        StepVerifier.create(requestService.createPendingRequestIfAbsent(
+                        idempotencyKey, incoming, RequestType.UPDATE_BALANCE_PESSIMISTIC, "test-client"))
+                .expectError(IdempotencyKeyConflictException.class)
+                .verify();
+    }
+
+    @Test
+    void jsonEquals_returnsTrueForBothNull() {
+        assertThat(requestService.jsonEquals(null, null)).isTrue();
+    }
+
+    @Test
+    void jsonEquals_returnsFalseWhenOneIsNull() {
+        assertThat(requestService.jsonEquals(null, "{}")).isFalse();
+        assertThat(requestService.jsonEquals("{}", null)).isFalse();
+    }
+
+    @Test
+    void jsonEquals_returnsTrueForSemanticallyEqualJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}")).isTrue();
+    }
+
+    @Test
+    void jsonEquals_returnsFalseForDifferentJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1}", "{\"a\":2}")).isFalse();
+    }
+
+    @Test
+    void completeRequest_updatesRequestToCompleted() {
+        UUID requestId = UUID.randomUUID();
+        when(requestRepository.markCompleted(eq(requestId), eq("test-client"), anyString(), any()))
+                .thenReturn(Mono.just(1));
+
+        StepVerifier.create(requestService.completeRequest(requestId, "test-client", "response-data"))
+                .verifyComplete();
+
+        verify(requestRepository).markCompleted(eq(requestId), eq("test-client"), eq("response-data"), any());
+    }
+
+    @Test
+    void failRequest_updatesRequestToFailed() {
+        UUID requestId = UUID.randomUUID();
+        when(requestRepository.markFailed(eq(requestId), eq("test-client"), anyString(), any()))
+                .thenReturn(Mono.just(1));
+
+        StepVerifier.create(requestService.failRequest(requestId, "test-client", "error-data"))
+                .verifyComplete();
+
+        verify(requestRepository).markFailed(eq(requestId), eq("test-client"), eq("error-data"), any());
+    }
 }

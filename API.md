@@ -172,6 +172,8 @@ Authorization: DPoP <access_token>
 DPoP: <proof-jwt>
 ```
 
+> **Data isolation**: all client and account reads are scoped to the calling OAuth2 client (`azp` claim from the access token). Each OAuth2 system only sees clients and accounts it has access to via the `client_access` join table.
+
 ### POST /api/clients
 
 Create asynchronous client creation request.
@@ -196,6 +198,8 @@ Validation:
 - `idempotencyKey`: optional UUID
 
 **Idempotency**: if `idempotencyKey` is provided, the server uses it for idempotent deduplication per client. Repeating the same key with the same payload returns the existing request (202). Repeating with a different payload returns 409 Conflict.
+
+**Duplicate phone**: if a client with the same phone already exists, the server adds access for the calling OAuth2 client and returns the existing client (COMPLETED) instead of failing with 409.
 
 Success response (`202`):
 
@@ -329,6 +333,8 @@ Typical errors:
 
 ## Account Endpoints (Protected)
 
+> **Data isolation**: account reads and balance updates are scoped to the calling OAuth2 client via the `client_access` join table.
+
 ### POST /api/accounts/balance/pessimistic
 
 Update account balance with pessimistic lock.
@@ -339,10 +345,22 @@ Request body:
 
 ```json
 {
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000",
   "clientId": 1,
   "amount": 100.50
 }
 ```
+
+Validation:
+- `idempotencyKey`: optional UUID for idempotent request tracking
+- `clientId`: required, positive
+- `amount`: required
+
+**Idempotency**: if `idempotencyKey` is provided, duplicate requests with the same payload return the cached result. Different payload returns 409. Requests still in progress return 409 with `error.account.updateInProgress`.
+
+Typical errors:
+- `404` + `40401` account not found (or not accessible by this OAuth2 client)
+- `409` + `40901` idempotency key conflict, request in progress, or optimistic lock conflict
 
 ---
 
@@ -356,14 +374,17 @@ Request body:
 
 ```json
 {
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000",
   "clientId": 1,
   "amount": -50.00
 }
 ```
 
+**Idempotency**: same behavior as pessimistic endpoint above.
+
 Typical errors:
-- `404` + `40401` account not found
-- `409` + `40901` optimistic lock conflict after retries
+- `404` + `40401` account not found (or not accessible by this OAuth2 client)
+- `409` + `40901` idempotency key conflict, request in progress, or optimistic lock conflict after retries
 
 ---
 

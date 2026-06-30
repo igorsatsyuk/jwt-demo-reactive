@@ -16,7 +16,9 @@ import lt.satsyuk.dto.LogoutRequest;
 import lt.satsyuk.dto.RefreshRequest;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,21 +50,26 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private static final String DPOP_HEADER = "DPoP";
+    private static final String AUTH_CLIENT_ID = "spring-app";
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final ClientAccessRepository clientAccessRepository;
     private final Clock clock;
 
     @Autowired
-    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository, Clock clock) {
+    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository,
+                      ClientAccessRepository clientAccessRepository, Clock clock) {
         this.accountRepository = accountRepository;
         this.clientRepository = clientRepository;
+        this.clientAccessRepository = clientAccessRepository;
         this.clock = clock;
     }
 
     @BeforeEach
     void setUpData() {
         accountRepository.deleteAll()
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block();
     }
@@ -259,6 +266,12 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                         .build())
                 .blockOptional()
                 .orElseThrow();
+
+        clientAccessRepository.save(ClientAccess.builder()
+                        .clientId(client.getId())
+                        .authClientId(AUTH_CLIENT_ID)
+                        .build())
+                .blockOptional();
 
         return accountRepository.save(Account.builder()
                         .balance(new BigDecimal(balance))

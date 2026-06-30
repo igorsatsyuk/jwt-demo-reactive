@@ -204,6 +204,82 @@ public class RequestService {
         );
     }
 
+    public record CreateRequestResult(UUID requestId, boolean alreadyExisted, RequestStatus status, String savedResponseData) {}
+
+    public Mono<CreateRequestResult> createPendingRequestIfAbsent(UUID idempotencyKey, Object payload,
+                                                                  RequestType type, String authClientId) {
+        OffsetDateTime now = now();
+        String payloadJson = writeJson(payload);
+
+        if (idempotencyKey != null) {
+            return requestRepository.findByIdAndAuthClientId(idempotencyKey, authClientId)
+                    .flatMap(existing -> {
+                        if (existing.getType() == type && jsonEquals(existing.getRequestData(), payloadJson)) {
+                            return Mono.just(new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData()));
+                        }
+                        return Mono.error(new IdempotencyKeyConflictException(idempotencyKey.toString()));
+                    })
+                    .switchIfEmpty(Mono.defer(() -> createNewRequest(idempotencyKey, payloadJson, type, authClientId, now)));
+        }
+
+        return createNewRequest(null, payloadJson, type, authClientId, now);
+    }
+
+    private Mono<CreateRequestResult> createNewRequest(UUID idempotencyKey, String payloadJson,
+                                                        RequestType type, String authClientId, OffsetDateTime now) {
+        UUID requestId = idempotencyKey != null ? idempotencyKey : UUID.randomUUID();
+        return requestRepository.insertRequest(
+                        requestId,
+                        type.name(),
+                        RequestStatus.PENDING.name(),
+                        now,
+                        now,
+                        payloadJson,
+                        authClientId
+                )
+                .flatMap(rows -> {
+                    if (rows == 1) {
+                        return Mono.just(new CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
+                    }
+                    return Mono.error(new IllegalStateException("Failed to persist request"));
+                })
+                .onErrorResume(DuplicateKeyException.class, ex -> {
+                    if (idempotencyKey == null) {
+                        return Mono.error(ex);
+                    }
+                    return requestRepository.findByIdAndAuthClientId(requestId, authClientId)
+                            .switchIfEmpty(Mono.error(ex))
+                            .flatMap(existing -> {
+                                if (existing.getType() == type && jsonEquals(existing.getRequestData(), payloadJson)) {
+                                    return Mono.just(new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData()));
+                                }
+                                return Mono.error(new IdempotencyKeyConflictException(String.valueOf(requestId)));
+                            });
+                });
+    }
+
+    public Mono<Void> completeRequest(UUID requestId, String authClientId, String responseData) {
+        return requestRepository.markCompleted(requestId, authClientId, responseData, now())
+                .then();
+    }
+
+    public Mono<Void> failRequest(UUID requestId, String authClientId, String errorData) {
+        return requestRepository.markFailed(requestId, authClientId, errorData, now())
+                .then();
+    }
+
+    boolean jsonEquals(String json1, String json2) {
+        if (json1 == null && json2 == null) return true;
+        if (json1 == null || json2 == null) return false;
+        try {
+            var tree1 = objectMapper.readTree(json1);
+            var tree2 = objectMapper.readTree(json2);
+            return tree1.equals(tree2);
+        } catch (JsonProcessingException _) {
+            return json1.equals(json2);
+        }
+    }
+
     private Mono<Void> claimAndProcessBatch() {
         OffsetDateTime claimedAt = now();
         AtomicInteger claimedCount = new AtomicInteger();
@@ -287,7 +363,7 @@ public class RequestService {
                     }
 
                     CreateClientRequest payload = readJson(request.getRequestData(), CreateClientRequest.class);
-                    return clientService.create(payload)
+                    return clientService.create(payload, authClientId)
                             .flatMap(clientResponse -> markCompleted(requestId, authClientId, clientResponse, startedNanos));
                 })
                 .onErrorResume(ex -> markFailed(requestId, authClientId, ex, startedNanos));

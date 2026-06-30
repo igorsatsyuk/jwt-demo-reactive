@@ -50,7 +50,8 @@ class ClientControllerTest {
     @Test
     void get_wrapsClientResponseIntoAppResponse() {
         ClientResponse client = new ClientResponse(10L, "Jane", DOE, "+37060000001");
-        when(clientService.get(10L)).thenReturn(Mono.just(client));
+        when(securityService.clientId()).thenReturn(Mono.just("test-client"));
+        when(clientService.get(10L, "test-client")).thenReturn(Mono.just(client));
 
         StepVerifier.create(controller.get(10L))
                 .expectNext(AppResponse.ok(client))
@@ -63,7 +64,8 @@ class ClientControllerTest {
                 new ClientResponse(1L, "Alice", SMITH, "+37060000002"),
                 new ClientResponse(2L, "Bob", SMITH, "+37060000003")
         );
-        when(clientService.searchByNameOrSurname(SMITH)).thenReturn(Mono.just(result));
+        when(securityService.clientId()).thenReturn(Mono.just("test-client"));
+        when(clientService.searchByNameOrSurname(SMITH, "test-client")).thenReturn(Mono.just(result));
 
         StepVerifier.create(controller.search(SMITH))
                 .expectNext(AppResponse.ok(result))

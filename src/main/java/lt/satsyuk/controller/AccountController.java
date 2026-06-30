@@ -12,6 +12,7 @@ import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.service.AccountService;
+import lt.satsyuk.service.SecurityService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono;
 public class AccountController {
 
     private final AccountService accountService;
+    private final SecurityService securityService;
 
     @PostMapping("/balance/pessimistic")
     @PreAuthorize("hasRole('UPDATE_BALANCE')")
@@ -43,6 +45,8 @@ public class AccountController {
     @ApiResponse(responseCode = "403", description = "Forbidden",
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "404", description = "Account not found",
+            content = @Content(mediaType = "application/json"))
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict, request already in progress, or optimistic lock conflict",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<AccountResponse>> updateBalancePessimistic(@Valid @RequestBody UpdateBalanceRequest request) {
         return accountService.updateBalancePessimistic(request)
@@ -63,7 +67,7 @@ public class AccountController {
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
-    @ApiResponse(responseCode = "409", description = "Optimistic lock conflict",
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict or optimistic lock conflict",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<AccountResponse>> updateBalanceOptimistic(@Valid @RequestBody UpdateBalanceRequest request) {
         return accountService.updateBalanceOptimistic(request)
@@ -83,7 +87,8 @@ public class AccountController {
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
     public Mono<AppResponse<AccountResponse>> getByClientId(@PathVariable("clientId") Long clientId) {
-        return accountService.getByClientId(clientId)
+        return securityService.clientId()
+                .flatMap(authClientId -> accountService.getByClientId(clientId, authClientId))
                 .map(AppResponse::ok);
     }
 }

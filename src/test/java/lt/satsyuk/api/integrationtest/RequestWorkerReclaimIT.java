@@ -6,6 +6,7 @@ import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import lt.satsyuk.repository.RequestRepository;
 import lt.satsyuk.service.RequestService;
@@ -34,6 +35,7 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
     private final RequestRepository requestRepository;
     private final ClientRepository clientRepository;
     private final AccountRepository accountRepository;
+    private final ClientAccessRepository clientAccessRepository;
     private final ObjectMapper objectMapper;
 
     @Autowired
@@ -42,12 +44,14 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
             RequestRepository requestRepository,
             ClientRepository clientRepository,
             AccountRepository accountRepository,
+            ClientAccessRepository clientAccessRepository,
             ObjectMapper objectMapper
     ) {
         this.requestService = requestService;
         this.requestRepository = requestRepository;
         this.clientRepository = clientRepository;
         this.accountRepository = accountRepository;
+        this.clientAccessRepository = clientAccessRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -55,6 +59,7 @@ class RequestWorkerReclaimIT extends AbstractIntegrationTest {
     void setUp() {
         requestRepository.deleteAll()
                 .then(accountRepository.deleteAll())
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block();
     }

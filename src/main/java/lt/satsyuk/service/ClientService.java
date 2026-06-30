@@ -4,10 +4,12 @@ import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.exception.ClientNotFoundException;
 import lt.satsyuk.exception.ClientSearchQueryTooShortException;
-import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.mapper.ClientMapper;
 import lt.satsyuk.model.Account;
+import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -37,23 +40,57 @@ public class ClientService {
 
     private final ClientRepository repo;
     private final AccountRepository accountRepository;
+    private final ClientAccessRepository clientAccessRepository;
     private final ClientMapper mapper;
     @Value("${app.clients.search.max-results:20}")
     private int searchMaxResults;
 
-    public Mono<ClientResponse> create(CreateClientRequest req) {
-        return Mono.fromSupplier(() -> mapper.toEntity(req))
-                .flatMap(repo::save)
-                .onErrorMap(this::isPhoneUniqueViolation,
-                        _ -> new PhoneAlreadyExistsException(req.phone()))
-                .flatMap(saved -> {
-                    Account account = Account.builder()
-                            .clientId(saved.getId())
-                            .balance(BigDecimal.ZERO)
-                            .build();
-                    return accountRepository.save(account)
-                            .then(Mono.fromSupplier(() -> mapper.toResponse(saved)));
+    public Mono<ClientResponse> create(CreateClientRequest req, String authClientId) {
+        return repo.findByPhone(req.phone())
+                .flatMap(existing -> addAccessIfAbsent(existing, authClientId)
+                        .then(Mono.fromSupplier(() -> mapper.toResponse(existing))))
+                .switchIfEmpty(Mono.defer(() ->
+                        Mono.fromSupplier(() -> mapper.toEntity(req))
+                                .flatMap(repo::save)
+                                .onErrorMap(this::isPhoneUniqueViolation, _ -> new DuplicateKeyException("phone"))
+                                .flatMap(saved -> saveClientAccess(saved.getId(), authClientId)
+                                        .then(saveZeroBalanceAccount(saved.getId()))
+                                        .then(Mono.fromSupplier(() -> mapper.toResponse(saved))))
+                                .onErrorResume(DuplicateKeyException.class, _ ->
+                                        repo.findByPhone(req.phone())
+                                                .switchIfEmpty(Mono.error(new IllegalStateException("Phone lookup failed after constraint violation")))
+                                                .flatMap(duplicate -> addAccessIfAbsent(duplicate, authClientId)
+                                                        .then(Mono.fromSupplier(() -> mapper.toResponse(duplicate)))))
+                ));
+    }
+
+    private Mono<Void> addAccessIfAbsent(Client client, String authClientId) {
+        return clientAccessRepository.existsByClientIdAndAuthClientId(client.getId(), authClientId)
+                .flatMap(exists -> {
+                    if (Boolean.TRUE.equals(exists)) {
+                        return Mono.empty();
+                    }
+                    return clientAccessRepository.save(ClientAccess.builder()
+                                    .clientId(client.getId())
+                                    .authClientId(authClientId)
+                                    .build())
+                            .then();
                 });
+    }
+
+    private Mono<ClientAccess> saveClientAccess(Long clientId, String authClientId) {
+        return clientAccessRepository.save(ClientAccess.builder()
+                .clientId(clientId)
+                .authClientId(authClientId)
+                .build());
+    }
+
+    private Mono<Void> saveZeroBalanceAccount(Long clientId) {
+        Account account = Account.builder()
+                .clientId(clientId)
+                .balance(BigDecimal.ZERO)
+                .build();
+        return accountRepository.save(account).then();
     }
 
     private boolean isPhoneUniqueViolation(Throwable throwable) {
@@ -147,19 +184,19 @@ public class ClientService {
         return value instanceof String str ? str : null;
     }
 
-    public Mono<ClientResponse> get(Long id) {
-        return repo.findById(id)
+    public Mono<ClientResponse> get(Long id, String authClientId) {
+        return repo.findByIdAndAuthClientId(id, authClientId)
                 .switchIfEmpty(Mono.error(new ClientNotFoundException(id)))
                 .map(mapper::toResponse);
     }
 
-    public Mono<List<ClientResponse>> searchByNameOrSurname(String query) {
+    public Mono<List<ClientResponse>> searchByNameOrSurname(String query, String authClientId) {
         String normalizedQuery = query == null ? "" : query.trim();
         if (normalizedQuery.length() < MIN_SEARCH_QUERY_LENGTH) {
             return Mono.error(new ClientSearchQueryTooShortException(MIN_SEARCH_QUERY_LENGTH));
         }
 
-        return repo.searchByNameOrSurname(normalizedQuery, searchMaxResults)
+        return repo.searchByNameOrSurnameAndAuthClientId(normalizedQuery, authClientId, searchMaxResults)
                 .map(mapper::toResponse)
                 .collectList();
     }
