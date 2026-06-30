@@ -1,5 +1,6 @@
 package lt.satsyuk.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.AccountResponse;
@@ -8,15 +9,12 @@ import lt.satsyuk.exception.AccountNotFoundException;
 import lt.satsyuk.exception.AccountOptimisticLockException;
 import lt.satsyuk.exception.AccountUpdateInProgressException;
 import lt.satsyuk.mapper.AccountMapper;
-import lt.satsyuk.model.Account;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.ReactiveTransaction;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
@@ -28,7 +26,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,7 +56,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimistic_replayAfterCompletedReturnsSavedResponse() throws Exception {
+    void updateBalancePessimistic_replayAfterCompletedReturnsSavedResponse() throws JsonProcessingException {
         UUID idempotencyKey = UUID.randomUUID();
         UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("25.50"));
         AccountResponse savedResponse = new AccountResponse(22L, 11L, new BigDecimal("125.50"));
@@ -79,7 +76,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalanceOptimistic_replayAfterCompletedReturnsSavedResponse() throws Exception {
+    void updateBalanceOptimistic_replayAfterCompletedReturnsSavedResponse() throws JsonProcessingException {
         UUID idempotencyKey = UUID.randomUUID();
         UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("3.00"));
         AccountResponse savedResponse = new AccountResponse(22L, 11L, new BigDecimal("13.00"));
@@ -95,7 +92,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimistic_replayAfterFailedRethrowsAccountNotFound() throws Exception {
+    void updateBalancePessimistic_replayAfterFailedRethrowsAccountNotFound() throws JsonProcessingException {
         UUID idempotencyKey = UUID.randomUUID();
         UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("25.50"));
         UUID requestId = UUID.randomUUID();
@@ -111,7 +108,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalanceOptimistic_replayAfterFailedRethrowsOptimisticLock() throws Exception {
+    void updateBalanceOptimistic_replayAfterFailedRethrowsOptimisticLock() throws JsonProcessingException {
         UUID idempotencyKey = UUID.randomUUID();
         UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("3.00"));
         UUID requestId = UUID.randomUUID();
@@ -155,7 +152,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimistic_replayAfterFailedWithUnknownTypeThrowsIllegalState() throws Exception {
+    void updateBalancePessimistic_replayAfterFailedWithUnknownTypeThrowsIllegalState() throws JsonProcessingException {
         UUID idempotencyKey = UUID.randomUUID();
         UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("25.50"));
         UUID requestId = UUID.randomUUID();
@@ -209,7 +206,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimistic_successCreatesRequestAndCompletesIt() throws Exception {
+    void updateBalancePessimistic_successCreatesRequestAndCompletesIt() throws JsonProcessingException {
         UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
         UUID requestId = UUID.randomUUID();
         lt.satsyuk.model.Account account = lt.satsyuk.model.Account.builder()

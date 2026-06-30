@@ -458,5 +458,30 @@ class GlobalExceptionHandlerTest {
             // No-op helper for MethodParameter construction.
         }
     }
+
+    @Test
+    void handleResourceAccessDeniedReturns403() {
+        ResourceAccessDeniedException ex = new ResourceAccessDeniedException();
+        when(messageService.getMessage("error.access.denied")).thenReturn("Access denied");
+
+        AppResponse<Void> response = handler.handleResourceAccessDenied(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.FORBIDDEN.getCode());
+        assertThat(response.message()).isEqualTo("Access denied");
+    }
+
+    @Test
+    void handleAccountUpdateInProgressReturns409() {
+        UUID requestId = UUID.randomUUID();
+        AccountUpdateInProgressException ex = new AccountUpdateInProgressException(requestId);
+        when(messageService.getMessage("error.account.updateInProgress", new Object[]{requestId.toString()}))
+                .thenReturn("Account update request is still in progress: " + requestId);
+
+        AppResponse<Void> response = handler.handleAccountUpdateInProgress(ex).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
+    }
 }
 
