@@ -17,6 +17,7 @@ import lt.satsyuk.dto.RefreshRequest;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,18 +52,22 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final ClientAccessRepository clientAccessRepository;
     private final Clock clock;
 
     @Autowired
-    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository, Clock clock) {
+    DpopIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository,
+                      ClientAccessRepository clientAccessRepository, Clock clock) {
         this.accountRepository = accountRepository;
         this.clientRepository = clientRepository;
+        this.clientAccessRepository = clientAccessRepository;
         this.clock = clock;
     }
 
     @BeforeEach
     void setUpData() {
         accountRepository.deleteAll()
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block();
     }

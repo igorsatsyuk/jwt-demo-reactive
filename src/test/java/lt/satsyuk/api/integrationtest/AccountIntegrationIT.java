@@ -5,7 +5,9 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,14 +48,18 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     private static final int DB_SETUP_MAX_ATTEMPTS = 4;
     private static final int PESSIMISTIC_SCENARIO_MAX_ATTEMPTS = 3;
     private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(10);
+    private static final String AUTH_CLIENT_ID = "spring-app";
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final ClientAccessRepository clientAccessRepository;
 
     @Autowired
-    AccountIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository) {
+    AccountIntegrationIT(AccountRepository accountRepository, ClientRepository clientRepository,
+                         ClientAccessRepository clientAccessRepository) {
         this.accountRepository = accountRepository;
         this.clientRepository = clientRepository;
+        this.clientAccessRepository = clientAccessRepository;
     }
 
     @MockitoBean
@@ -62,6 +68,7 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         withTransientDbRetry(() -> accountRepository.deleteAll()
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block(BLOCK_TIMEOUT));
     }
@@ -236,7 +243,7 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
 
     private void configureRole(String role) {
         OAuth2AuthenticatedPrincipal principal = new DefaultOAuth2AuthenticatedPrincipal(
-                Map.of("sub", "integration-user"),
+                Map.of("sub", "integration-user", "azp", AUTH_CLIENT_ID),
                 List.of(new SimpleGrantedAuthority("ROLE_" + role))
         );
         when(opaqueTokenIntrospector.introspect(anyString())).thenReturn(Mono.just(principal));
@@ -256,6 +263,12 @@ class AccountIntegrationIT extends AbstractIntegrationTest {
                         .build())
                 .blockOptional()
                 .orElseThrow();
+
+        clientAccessRepository.save(ClientAccess.builder()
+                        .clientId(client.getId())
+                        .authClientId(AUTH_CLIENT_ID)
+                        .build())
+                .blockOptional();
 
         return accountRepository.save(Account.builder()
                         .balance(new BigDecimal(balance))

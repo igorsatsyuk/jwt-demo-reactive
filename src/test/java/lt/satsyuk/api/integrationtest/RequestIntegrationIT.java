@@ -7,7 +7,9 @@ import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
 import lt.satsyuk.model.RequestStatus;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import lt.satsyuk.repository.RequestRepository;
 import org.awaitility.Awaitility;
@@ -44,16 +46,19 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     private final ClientRepository clientRepository;
     private final AccountRepository accountRepository;
     private final RequestRepository requestRepository;
+    private final ClientAccessRepository clientAccessRepository;
 
     @Autowired
     RequestIntegrationIT(
             ClientRepository clientRepository,
             AccountRepository accountRepository,
-            RequestRepository requestRepository
+            RequestRepository requestRepository,
+            ClientAccessRepository clientAccessRepository
     ) {
         this.clientRepository = clientRepository;
         this.accountRepository = accountRepository;
         this.requestRepository = requestRepository;
+        this.clientAccessRepository = clientAccessRepository;
     }
 
     @MockitoBean
@@ -63,6 +68,7 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
     void setUp() {
         requestRepository.deleteAll()
                 .then(accountRepository.deleteAll())
+                .then(clientAccessRepository.deleteAll())
                 .then(clientRepository.deleteAll())
                 .block();
     }
