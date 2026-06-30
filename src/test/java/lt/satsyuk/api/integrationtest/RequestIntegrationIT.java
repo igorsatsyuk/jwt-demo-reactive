@@ -144,10 +144,13 @@ class RequestIntegrationIT extends AbstractIntegrationTest {
         assertThat(completed.response()).isInstanceOf(Map.class);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> nested = (Map<String, Object>) completed.response();
-        assertThat(nested)
-                .containsEntry("code", 0)
-                .containsEntry("id", existing.getId().intValue());
+        Map<String, Object> outer = (Map<String, Object>) completed.response();
+        assertThat(outer).containsEntry("code", 0);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) outer.get("data");
+        assertThat(data).isNotNull();
+        assertThat(data).containsEntry("id", existing.getId().intValue());
     }
 
     @Test
