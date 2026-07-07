@@ -182,7 +182,7 @@ public class RequestService {
 
     public Mono<RequestStatusResponse> getRequestStatus(UUID requestId, String authClientId) {
         return requestRepository.findByIdAndAuthClientId(requestId, authClientId)
-                .map(request -> toStatusResponse(request))
+                .map(this::toStatusResponse)
                 .switchIfEmpty(Mono.defer(() -> requestRepository.findById(requestId)
                         .flatMap(request -> {
                             if ("unknown".equals(request.getAuthClientId())) {
