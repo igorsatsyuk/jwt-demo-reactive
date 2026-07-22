@@ -4,12 +4,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-@Component
+@Service
 public class SecurityService {
 
     public static final String ANONYMOUS = "anonymous";
