@@ -341,7 +341,7 @@ public class RequestService {
                     long maxAgeSeconds = stats.getMaxAgeSeconds() != null ? stats.getMaxAgeSeconds() : 0L;
                     if (reclaimed > 0) {
                         reclaimedCount.increment(reclaimed);
-                        staleProcessingAgeSeconds.record((double) maxAgeSeconds);
+                        staleProcessingAgeSeconds.record(maxAgeSeconds);
                         log.warn(
                                 "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
                                 reclaimed,
