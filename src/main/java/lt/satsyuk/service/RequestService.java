@@ -339,9 +339,12 @@ public class RequestService {
                 .doOnNext(stats -> {
                     int reclaimed = stats.getReclaimedCount() != null ? stats.getReclaimedCount() : 0;
                     long maxAgeSeconds = stats.getMaxAgeSeconds() != null ? stats.getMaxAgeSeconds() : 0L;
+                    double maxAgeSecondsMetric = stats.getMaxAgeSeconds() != null
+                            ? stats.getMaxAgeSeconds().doubleValue()
+                            : 0d;
                     if (reclaimed > 0) {
                         reclaimedCount.increment(reclaimed);
-                        staleProcessingAgeSeconds.record(maxAgeSeconds);
+                        staleProcessingAgeSeconds.record(maxAgeSecondsMetric);
                         log.warn(
                                 "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
                                 reclaimed,
