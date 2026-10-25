@@ -12,7 +12,10 @@ class KeycloakIntegrationIT extends KeycloakIntegrationTest {
 
     @Test
     void login_success() {
-        loginAndAssertOk(USERNAME, USER_PASSWORD);
+        KeycloakTokenResponse response = loginAndGetData(USERNAME, USER_PASSWORD);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotBlank();
     }
 
     @Test
@@ -33,7 +36,10 @@ class KeycloakIntegrationIT extends KeycloakIntegrationTest {
 
     @Test
     void admin_login_success() {
-        loginAndAssertOk(ADMIN, ADMIN_PASSWORD);
+        KeycloakTokenResponse response = loginAndGetData(ADMIN, ADMIN_PASSWORD);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotBlank();
     }
 
     @Test

@@ -14,7 +14,7 @@ class MainApplicationTest {
 
     @Test
     void main_delegatesToSpringApplicationRun() {
-        String[] args = new String[]{"--spring.main.web-application-type=none"};
+        String[] args = {"--spring.main.web-application-type=none"};
 
         try (MockedStatic<SpringApplication> springApplication = Mockito.mockStatic(SpringApplication.class)) {
             springApplication.when(() -> SpringApplication.run(MainApplication.class, args)).thenReturn(null);

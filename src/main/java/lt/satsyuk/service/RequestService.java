@@ -325,7 +325,7 @@ public class RequestService {
         if (createdAt == null) {
             return;
         }
-        double lagSeconds = Math.max(0d, Duration.between(createdAt, claimedAt).toMillis() / 1000d);
+        double lagSeconds = Math.max(0d, ((double) Duration.between(createdAt, claimedAt).toMillis()) / 1000d);
         claimLagSeconds.record(lagSeconds);
     }
 
