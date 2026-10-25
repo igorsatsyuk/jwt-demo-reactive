@@ -325,7 +325,7 @@ public class RequestService {
         if (createdAt == null) {
             return;
         }
-        double lagSeconds = Math.max(0d, ((double) Duration.between(createdAt, claimedAt).toMillis()) / 1000d);
+        double lagSeconds = Math.max(0d, Duration.between(createdAt, claimedAt).toMillis() / 1000d);
         claimLagSeconds.record(lagSeconds);
     }
 
@@ -341,7 +341,7 @@ public class RequestService {
                     long maxAgeSeconds = stats.getMaxAgeSeconds() != null ? stats.getMaxAgeSeconds() : 0L;
                     if (reclaimed > 0) {
                         reclaimedCount.increment(reclaimed);
-                        staleProcessingAgeSeconds.record(maxAgeSeconds);
+                        staleProcessingAgeSeconds.record((double) maxAgeSeconds);
                         log.warn(
                                 "Request worker reclaimed {} stale PROCESSING request(s) older than {}; oldest age={}s",
                                 reclaimed,
